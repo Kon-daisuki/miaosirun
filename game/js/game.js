@@ -147,7 +147,6 @@ class Game {
     this.boss = null;
   }
 
-  // 坐标转换：client → canvas逻辑坐标（两者1:1，只减offset）
   _toCanvas(clientX, clientY) {
     const r = this.canvas.getBoundingClientRect();
     return { x: clientX - r.left, y: clientY - r.top };
@@ -168,6 +167,9 @@ class Game {
     this._handleTap(x, y);
   }
 
+  /**
+   * 核心改动：加入距离判断逻辑
+   */
   _handleTap(cx, cy) {
     const cw = this.canvas.width;
     const ch = this.canvas.height;
@@ -176,7 +178,7 @@ class Game {
     const lane = cy < ch / 2 ? 'top' : 'bottom';
     this._tapFlash = { lane, timer: 200 };
 
-    // Boss连击
+    // Boss连击处理
     if (this.boss && !this.boss._entering && this.boss.isInLane(lane)) {
       this.boss.click();
       this.player.bossHit(lane);
@@ -188,28 +190,41 @@ class Game {
 
     this.player.attack(lane);
 
-    // 泳道命中判定：点对应泳道即可命中该泳道最近的怪（喵斯风格）
     let hit = false;
-    // 按距离玩家从近到远排序，优先消灭最近的
+    // 按距离从近到远排序
     const inLane = this.monsters
       .filter(m => m.lane === lane && !m.dead && (m.alpha === undefined || m.alpha > 0.05))
       .sort((a, b) => a.x - b.x);
 
     if (inLane.length > 0) {
-      const m = inLane[0]; // 最近的怪
-      m.hit();
-      hit = true;
-      this.combo++;
-      this.maxCombo = Math.max(this.maxCombo, this.combo);
-      const pts = m.type === 'cloud' ? 150 : 100;
-      this.score += pts + (this.combo > 5 ? this.combo * 5 : 0);
-      UI.spawnComboAnim(m.x, m.y - 50, `+${pts}`, m.type === 'cloud' ? '#cc88ff' : '#00f0ff');
-      if (this.combo % 5 === 0) {
-        UI.spawnComboAnim(cw / 2, ch * 0.12, `${this.combo} COMBO!!`, '#ffd700');
+      const m = inLane[0]; 
+      
+      /** * 判定距离限制：
+       * HIT_RANGE 代表怪物 X 坐标距离玩家 X 坐标的最大允许打击范围。
+       * 如果怪物太远（m.x > player.x + HIT_RANGE），点击无效。
+       */
+      const HIT_RANGE = 160; 
+      const playerPos = this.player.x || 120; // 假设玩家基础坐标
+
+      if (m.x < playerPos + HIT_RANGE) {
+        m.hit();
+        hit = true;
+        this.combo++;
+        this.maxCombo = Math.max(this.maxCombo, this.combo);
+        const pts = m.type === 'cloud' ? 150 : 100;
+        this.score += pts + (this.combo > 5 ? this.combo * 5 : 0);
+        UI.spawnComboAnim(m.x, m.y - 50, `+${pts}`, m.type === 'cloud' ? '#cc88ff' : '#00f0ff');
+        
+        if (this.combo % 5 === 0) {
+          UI.spawnComboAnim(cw / 2, ch * 0.12, `${this.combo} COMBO!!`, '#ffd700');
+        }
       }
     }
 
-    if (!hit && !this.boss) this.combo = 0;
+    // 如果没有击中任何怪物，且当前没有 Boss，则断 Combo
+    if (!hit && !this.boss) {
+      this.combo = 0;
+    }
   }
 
   _gameOver() {
@@ -227,16 +242,13 @@ class Game {
     ctx.save();
     ctx.translate(shake.x, shake.y);
 
-    // 背景
     ctx.drawImage(AssetLoader.get('background'), 0, 0, cw, ch);
 
-    // 区域底色
     ctx.fillStyle = 'rgba(0,200,255,0.04)';
     ctx.fillRect(0, 0, cw, ch / 2);
     ctx.fillStyle = 'rgba(255,100,200,0.04)';
     ctx.fillRect(0, ch / 2, cw, ch / 2);
 
-    // 点击闪光
     if (this._tapFlash) {
       const a = (this._tapFlash.timer / 200) * 0.22;
       ctx.fillStyle = this._tapFlash.lane === 'top'
@@ -244,7 +256,6 @@ class Game {
       ctx.fillRect(0, this._tapFlash.lane === 'top' ? 0 : ch / 2, cw, ch / 2);
     }
 
-    // 水平中线
     ctx.save();
     ctx.setLineDash([16, 10]);
     ctx.strokeStyle = 'rgba(255,255,255,0.18)';
@@ -267,7 +278,6 @@ class Game {
   }
 
   _resize() {
-    // 逻辑坐标 = CSS像素，不乘DPR，保证触控和渲染坐标完全一致
     const w = window.innerWidth;
     const h = window.innerHeight;
     this.canvas.width        = w;
@@ -277,4 +287,3 @@ class Game {
     if (this.player) this.player.resize(this.canvas);
   }
 }
-
