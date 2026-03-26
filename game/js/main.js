@@ -1,6 +1,8 @@
 /**
  * main.js
+ * 入口：屏幕切换 + 资源加载 + Game 实例管理
  */
+
 (async () => {
   /* ── DOM 引用 ── */
   const screens = {
@@ -8,7 +10,6 @@
     howto:    document.getElementById('screen-howto'),
     game:     document.getElementById('screen-game'),
     gameover: document.getElementById('screen-gameover'),
-    buff:     document.getElementById('buff-modal')
   };
 
   const btnStart   = document.getElementById('btn-start');
@@ -16,60 +17,70 @@
   const btnBack    = document.getElementById('btn-back');
   const btnRestart = document.getElementById('btn-restart');
   const btnMenu    = document.getElementById('btn-menu');
+  const finalScore = document.getElementById('final-score');
+  const finalCombo = document.getElementById('final-combo');
 
-  /* ── 屏幕切换函数 ── */
+  /* ── 屏幕切换 ── */
   function showScreen(name) {
-    console.log("切换到屏幕:", name);
-    // 隐藏所有屏幕
-    Object.values(screens).forEach(s => {
-      if(s) s.classList.remove('active');
-    });
-    // 显示目标屏幕
-    if(screens[name]) {
-      screens[name].classList.add('active');
-    }
+    Object.values(screens).forEach(s => s.classList.remove('active'));
+    screens[name].classList.add('active');
   }
 
   /* ── 资源加载 ── */
-  if (btnStart) {
-    btnStart.textContent = '加载中...';
-    btnStart.disabled = true;
-  }
+  btnStart.textContent = '加载中…';
+  btnStart.disabled = true;
+
+  // 定义音频清单 (匹配 assets/audio 目录)
+  const AUDIO_MANIFEST = {
+    bgm:  'assets/audio/bgm.mp3',
+    hit:  'assets/audio/hit.mp3',
+    miss: 'assets/audio/miss.mp3',
+  };
 
   try {
-    // 假设 ASSET_MANIFEST 在 assetLoader.js 里定义
-    await AssetLoader.load(ASSET_MANIFEST);
-    console.log("资源加载成功");
+    // 传入两个清单进行加载
+    await AssetLoader.load(ASSET_MANIFEST, AUDIO_MANIFEST);
   } catch (e) {
-    console.error("资源加载异常:", e);
-  } finally {
-    if (btnStart) {
-      btnStart.textContent = '开始游戏';
-      btnStart.disabled = false;
-    }
+    console.warn('资源加载失败（将使用占位符）', e);
   }
 
-  /* ── 初始化游戏 ── */
+  btnStart.textContent = '开始游戏';
+  btnStart.disabled = false;
+
+  /* ── Game 实例 ── */
   const canvas = document.getElementById('gameCanvas');
-  const game = new Game(canvas);
+  const game   = new Game(canvas);
 
   game.onGameOver = () => {
+    AssetLoader.stop('bgm'); // 游戏结束停止 BGM
     const result = game.getResult();
-    document.getElementById('final-score').textContent = result.score;
-    document.getElementById('final-combo').textContent = result.maxCombo;
+    finalScore.textContent = result.score;
+    finalCombo.textContent = result.maxCombo;
     showScreen('gameover');
   };
 
-  /* ── 按钮事件绑定 (增加空值保护) ── */
-  if(btnStart) btnStart.onclick = () => { showScreen('game'); game.start(); };
-  if(btnHowto) btnHowto.onclick = () => showScreen('howto');
-  if(btnBack)  btnBack.onclick  = () => showScreen('start');
-  if(btnRestart) btnRestart.onclick = () => { showScreen('game'); game.start(); };
-  if(btnMenu) btnMenu.onclick = () => { game.stop(); showScreen('start'); };
+  /* ── 按钮绑定 ── */
+  btnStart.addEventListener('click', () => {
+    showScreen('game');
+    AssetLoader.play('bgm', true); // 用户点击后播放 BGM 以绕过浏览器限制
+    game.start();
+  });
 
-  // 暴露给全局方便调试
-  window.gameInstance = game;
+  btnHowto.addEventListener('click', () => showScreen('howto'));
+  btnBack.addEventListener('click',  () => showScreen('start'));
 
-  /* ── 基础交互保护 ── */
-  document.addEventListener('contextmenu', e => e.preventDefault());
+  btnRestart.addEventListener('click', () => {
+    showScreen('game');
+    AssetLoader.play('bgm', true); // 重开时确保 BGM 播放
+    game.start();
+  });
+
+  btnMenu.addEventListener('click', () => {
+    game.stop();
+    AssetLoader.stop('bgm'); // 返回菜单停止 BGM
+    showScreen('start');
+  });
+
+  /* ── 防止移动端默认滚动 ── */
+  document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
 })();
