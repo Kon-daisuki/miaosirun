@@ -1,9 +1,12 @@
 /**
  * game.js
- * 优化点：引入独立 Buff 系统，并加入护盾、闪电链、磁力场、狂热、暴击等机制支持。
+ * 核心逻辑：
+ * 1. 结合 Buff 系统进行伤害计算（暴击、狂热、连击加成）。
+ * 2. 削弱 Boss 血量成长，提升后期爽感。
+ * 3. 护盾逻辑：漏怪不扣血、不掉连击。
  */
 
-// --- 独立的音频管理对象 ---
+// --- 音频管理对象 ---
 const AudioSys = {
   bgm: new Audio('assets/audio/bgm.mp3'),
   hit: new Audio('assets/audio/hit.mp3'),
@@ -25,7 +28,6 @@ const AudioSys = {
     s.play().catch(e => console.warn('Miss音效播放失败:', e));
   }
 };
-// --------------------------------------------------------
 
 class Game {
   constructor(canvas) {
@@ -56,29 +58,28 @@ class Game {
     this._lastTime = 0;
     this._rafId    = null;
 
-    // 面板属性初始化
+    // 初始化属性面板
     this.stats = this._getDefaultStats();
 
     document.addEventListener('touchstart', e => this._onTouch(e), { passive: false });
     document.addEventListener('mousedown',  e => this._onMouse(e));
   }
 
-  // 获取默认的玩家属性
+  // 默认属性
   _getDefaultStats() {
     return {
       clickDamage: 1,        // 基础点击伤害
-      comboDamage: false,    // 连击附伤
-      execute: 0,            // 斩杀线
+      comboDamage: false,    // 连击附伤开关
+      execute: 0,            // 斩杀百分比
       slowResist: 1.0,       // 难度增长减缓
       scoreMultiplier: 1,    // 分数倍率
-      // 【新增机制】
-      shield: 0,             // 当前护盾层数
-      hasShieldRegen: false, // 是否拥有自动回复护盾能力
-      shieldTimer: 0,        // 护盾回复计时器
-      chainLightning: 0,     // 闪电链触发概率 (0~1)
-      hitRangeBonus: 0,      // 磁力场判定范围增加
-      frenzy: false,         // 狂热状态
-      critChance: 0          // 暴击概率 (0~1)
+      shield: 0,             // 当前护盾
+      hasShieldRegen: false, // 护盾回复开关
+      shieldTimer: 0,        // 护盾计时
+      chainLightning: 0,     // 闪电链概率
+      hitRangeBonus: 0,      // 判定范围加成
+      frenzy: false,         // 狂热开关
+      critChance: 0          // 暴击率
     };
   }
 
@@ -130,6 +131,7 @@ class Game {
   }
 
   _update(dt) {
+    // 难度随时间增长
     this._diffTimer += dt;
     if (this._diffTimer >= 15000) { 
       this._diffTimer = 0;
@@ -137,10 +139,10 @@ class Game {
       this._speedMultiplier += (0.15 * this.stats.slowResist); 
     }
 
-    // 【新增】护盾自动回复逻辑
+    // 护盾回复逻辑
     if (this.stats.hasShieldRegen) {
       this.stats.shieldTimer += dt;
-      if (this.stats.shieldTimer >= 30000) { // 每 30 秒回复 1 层
+      if (this.stats.shieldTimer >= 30000) { 
         this.stats.shieldTimer = 0;
         this.stats.shield += 1;
         UI.spawnComboAnim(this.canvas.width / 2, this.canvas.height / 2, `🛡️护盾 +1`, '#00f0ff');
@@ -156,6 +158,7 @@ class Game {
       if (this._tapFlash.timer <= 0) this._tapFlash = null;
     }
 
+    // Boss 生成计时
     this._bossTimer += dt;
     if (this._bossTimer >= this._bossInterval) {
       if (this._spawnBoss()) {
@@ -163,17 +166,20 @@ class Game {
       }
     }
 
+    // 小怪生成计时
     this._spawnTimer += dt;
     if (this._spawnTimer >= this._spawnInterval) {
       this._spawnTimer = 0;
       this._spawnMonster();
     }
 
+    // 怪物穿透判定
     for (const m of this.monsters) {
       m.update(dt, this.player.x);
       if ((m.type === 'normal' || m.type === 'cloud') && m.passed && !m._damageDone) {
         m._damageDone = true;
-        // 【新增】护盾抵挡小怪伤害
+        
+        // 护盾抵挡逻辑
         if (this.stats.shield > 0) {
           this.stats.shield -= 1;
           UI.spawnComboAnim(this.player.x || 120, this.canvas.height / 2, `免疫!`, '#00f0ff');
@@ -186,12 +192,13 @@ class Game {
       }
     }
 
+    // Boss 状态判定
     if (this.boss) {
       this.boss.update(dt);
       if (this.boss.killed) {
         this._onBossKilled();
       } else if (this.boss.failed) {
-        // 【新增】护盾抵挡 Boss 失败的伤害
+        // 护盾也可以抵挡 Boss 失败的惩罚
         if (this.stats.shield > 0) {
           this.stats.shield -= 1;
           UI.spawnComboAnim(this.player.x || 120, this.canvas.height / 2, `免疫!`, '#00f0ff');
@@ -232,7 +239,9 @@ class Game {
     if (availableLanes.length === 0) return false; 
 
     const lane = availableLanes[Math.floor(Math.random() * availableLanes.length)];
-    const dynamicHp = Math.floor(25 * this._speedMultiplier + this.score / 200);
+    
+    // 【削弱公式】：基础15 + 难度成长 + 分数/500（原为200）
+    const dynamicHp = Math.floor(15 + 10 * this._speedMultiplier + this.score / 500);
 
     this.boss = new BossMonster({
       lane, 
@@ -253,6 +262,7 @@ class Game {
     Effects.shake(12, 600);
     this.boss = null;
 
+    // 暂停并显示三选一 Buff
     if (typeof BuffSystem !== 'undefined') {
       this._paused = true;
       BuffSystem.showRandomBuffs(this, () => {
@@ -290,36 +300,43 @@ class Game {
     const lane = cy < ch / 2 ? 'top' : 'bottom';
     this._tapFlash = { lane, timer: 200 };
 
+    // ======= 打 BOSS 核心计算逻辑 =======
     if (this.boss && !this.boss._entering && this.boss.isInLane(lane)) {
       
       let damage = this.stats.clickDamage;
       
-      // 【新增】狂热状态附加伤害
-      if (this.stats.frenzy && this.combo >= 50) {
-        damage += 1;
+      // 狂热：连击 >= 30, 额外 +3
+      if (this.stats.frenzy && this.combo >= 30) {
+        damage += 3;
       }
       
-      if (this.stats.comboDamage) damage += Math.floor(this.combo / 15);
+      // 连击附伤：每 10 连击 +1
+      if (this.stats.comboDamage) {
+        damage += Math.floor(this.combo / 10);
+      }
 
-      // 【新增】致命暴击概率判定
+      // 致命暴击：25% 概率触发 3 倍伤害
       let isCrit = false;
       if (this.stats.critChance > 0 && Math.random() < this.stats.critChance) {
-        damage *= 2; // 双倍伤害
+        damage *= 3; 
         isCrit = true;
       }
 
-      this.boss.click(); 
+      this.boss.click(); // 执行原有的点击动画效果
       
+      // 额外扣除 Buff 带来的血量伤害（扣除原有默认的1点后剩余的部分）
       if (damage > 1 && this.boss.hp > 0) {
         this.boss.hp -= (damage - 1);
       }
 
+      // 弱点击破：斩杀逻辑
       if (this.stats.execute > 0 && this.boss.hp > 0) {
         if (this.boss.hp / this.boss.maxHp <= this.stats.execute) {
            this.boss.hp = 0;
         }
       }
 
+      // 死亡判定
       if (this.boss.hp <= 0) {
         this.boss.hp = 0;
         this.boss.killed = true;
@@ -331,13 +348,13 @@ class Game {
       this.maxCombo = Math.max(this.maxCombo, this.combo);
       AudioSys.playHit();
       
-      // 暴击特效展示
       if (isCrit) {
-        UI.spawnComboAnim(this.boss.x || cw/2 + 50, this.boss.y || ch/2, `暴击!`, '#ff3aff');
+        UI.spawnComboAnim(cx, cy - 50, `暴击!`, '#ff3aff');
       }
       return;
     }
 
+    // ======= 打小怪 核心逻辑 =======
     this.player.attack(lane);
 
     let hit = false;
@@ -348,7 +365,6 @@ class Game {
     if (inLane.length > 0) {
       const m = inLane[0]; 
       
-      // 【修改】加入磁力场的判定范围扩大
       const HIT_RANGE = 160 + this.stats.hitRangeBonus; 
       const playerPos = this.player.x || 120;
 
@@ -357,21 +373,19 @@ class Game {
         hit = true;
         this.combo++;
         this.maxCombo = Math.max(this.maxCombo, this.combo);
+        
         const pts = (m.type === 'cloud' ? 150 : 100) * this.stats.scoreMultiplier;
         this.score += pts + (this.combo > 5 ? this.combo * 5 : 0);
         
         AudioSys.playHit();
         UI.spawnComboAnim(m.x, m.y - 50, `+${pts}`, m.type === 'cloud' ? '#cc88ff' : '#00f0ff');
         
-        // 【新增】闪电链触发判定
+        // 闪电链触发
         if (this.stats.chainLightning > 0 && Math.random() < this.stats.chainLightning) {
-          // 寻找同一泳道的下一个活着的怪物
           const nextM = this.monsters.find(mx => mx.lane === lane && !mx.dead && mx !== m);
           if (nextM && nextM.x < cw) { 
             nextM.hit();
-            const nextPts = (nextM.type === 'cloud' ? 150 : 100) * this.stats.scoreMultiplier;
-            this.score += nextPts;
-            UI.spawnComboAnim(nextM.x, nextM.y - 50, `⚡闪电链!`, '#00f0ff');
+            UI.spawnComboAnim(nextM.x, nextM.y - 50, `⚡`, '#00f0ff');
           }
         }
         
@@ -434,15 +448,13 @@ class Game {
     UI.draw(ctx, { cw, ch, score: this.score, combo: this.combo,
       maxCombo: this.maxCombo, hp: this.player.hp, maxHp: this.player.maxHp, boss: this.boss });
 
-    // 【新增】如果玩家拥有护盾，在左上角(血条下方)绘制护盾层数提示
+    // 绘制护盾 UI
     if (this.stats.shield > 0) {
       ctx.save();
       ctx.fillStyle = '#00f0ff';
-      ctx.font = 'bold 16px sans-serif';
+      ctx.font = 'bold 18px Orbitron';
       ctx.textAlign = 'left';
-      ctx.shadowColor = '#000';
-      ctx.shadowBlur = 4;
-      ctx.fillText(`🛡️ 护盾: ${this.stats.shield}`, 20, 80); 
+      ctx.fillText(`🛡️ SHIELD: ${this.stats.shield}`, 20, 85); 
       ctx.restore();
     }
 
@@ -458,4 +470,4 @@ class Game {
     this.canvas.style.height = h + 'px';
     if (this.player) this.player.resize(this.canvas);
   }
-}
+  }
