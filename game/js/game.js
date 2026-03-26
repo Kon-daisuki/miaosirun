@@ -1,8 +1,5 @@
 /**
  * game.js
- * 优化点：
- * 1. 限制 Boss 同时只能存在一个。
- * 2. Boss 出现后，其所在的泳道不再生成普通小怪。
  */
 
 class Game {
@@ -85,7 +82,6 @@ class Game {
       if (this._tapFlash.timer <= 0) this._tapFlash = null;
     }
 
-    // --- 修改：生成逻辑判定 ---
     this._bossTimer += dt;
     if (this._bossTimer >= this._bossInterval) {
       this._bossTimer = 0;
@@ -97,13 +93,13 @@ class Game {
       this._spawnTimer = 0;
       this._spawnMonster();
     }
-    // ------------------------
 
     for (const m of this.monsters) {
       m.update(dt, this.player.x);
       if ((m.type === 'normal' || m.type === 'cloud') && m.passed && !m._damageDone) {
         m._damageDone = true;
         this.player.hit();
+        AssetLoader.play('miss'); // 怪物漏掉，播放 miss 音效
         this.combo = 0;
         if (this.player.isDead()) this._gameOver();
       }
@@ -115,6 +111,7 @@ class Game {
         this._onBossKilled();
       } else if (this.boss.failed) {
         this.player.hit();
+        AssetLoader.play('miss'); // Boss 逃走，播放 miss 音效
         this.combo = 0;
         this.boss  = null;
         if (this.player.isDead()) this._gameOver();
@@ -124,21 +121,13 @@ class Game {
     this.monsters = this.monsters.filter(m => !m.dead);
   }
 
-  /**
-   * 优化：普通怪物生成避开 Boss 泳道
-   */
   _spawnMonster() {
     let availableLanes = ['top', 'bottom'];
-
-    // 如果 Boss 存在，剔除 Boss 所在的泳道
     if (this.boss) {
       availableLanes = availableLanes.filter(l => l !== this.boss.lane);
     }
-
-    // 如果没有可用泳道（例如未来扩展了多个 Boss），则不生成小怪
     if (availableLanes.length === 0) return;
 
-    // 从可用泳道中随机选择一个
     const lane = availableLanes[Math.floor(Math.random() * availableLanes.length)];
     const speed = 0.10 + Math.random() * 0.07;
     const opts = { lane, canvasW: this.canvas.width, canvasH: this.canvas.height, speed };
@@ -146,12 +135,8 @@ class Game {
     this.monsters.push(Math.random() < 0.55 ? new NormalMonster(opts) : new CloudMonster(opts));
   }
 
-  /**
-   * 优化：防止同时出现多个 Boss
-   */
   _spawnBoss() {
-    if (this.boss) return; // 如果当前已有 Boss，直接跳过生成过程
-
+    if (this.boss) return;
     const lane = Math.random() < 0.5 ? 'top' : 'bottom';
     this.boss = new BossMonster({
       lane, 
@@ -168,6 +153,7 @@ class Game {
     this.combo += 5;
     this.maxCombo = Math.max(this.maxCombo, this.combo);
     UI.spawnComboAnim(this.canvas.width / 2, this.canvas.height / 2 - 40, `BOSS +${bonus}`, '#ffd700');
+    AssetLoader.play('hit'); // 击杀 Boss 播放打击感较强的 hit
     Effects.shake(12, 600);
     this.boss = null;
   }
@@ -203,6 +189,7 @@ class Game {
     if (this.boss && !this.boss._entering && this.boss.isInLane(lane)) {
       this.boss.click();
       this.player.bossHit(lane);
+      AssetLoader.play('hit'); // 点击 Boss 播放 hit 音效
       this.score += 10;
       this.combo++;
       this.maxCombo = Math.max(this.maxCombo, this.combo);
@@ -223,6 +210,7 @@ class Game {
 
       if (m.x < playerPos + HIT_RANGE) {
         m.hit();
+        AssetLoader.play('hit'); // 成功击中普通怪
         hit = true;
         this.combo++;
         this.maxCombo = Math.max(this.maxCombo, this.combo);
@@ -237,6 +225,7 @@ class Game {
     }
 
     if (!hit && !this.boss) {
+      AssetLoader.play('miss'); // 空挥播放 miss 音效
       this.combo = 0;
     }
   }
