@@ -8,10 +8,10 @@ const AssetLoader = (() => {
 
   /**
    * 批量加载资源
-   * @param {Object} manifest 包含 images 和 audio 的对象
+   * @param {Object} manifest { images: {}, audio: {} }
    */
   async function load(manifest) {
-    // 1. 处理图片加载
+    // 1. 加载图片
     const imgPromises = Object.entries(manifest.images || {}).map(([key, url]) => {
       return new Promise((resolve) => {
         const img = new Image();
@@ -25,42 +25,35 @@ const AssetLoader = (() => {
       });
     });
 
-    // 2. 处理音频加载
+    // 2. 加载音频
     const audioPromises = Object.entries(manifest.audio || {}).map(([key, url]) => {
       return new Promise((resolve) => {
         const audio = new Audio();
-        // 移动端兼容性：使用 canplaythrough 确保加载完成
         audio.oncanplaythrough = () => { _audioCache[key] = audio; resolve(); };
         audio.onerror = () => {
           console.warn(`音频加载失败: ${url}`);
           resolve();
         };
         audio.src = url;
-        audio.load(); // 显式触发加载
+        audio.load();
       });
     });
 
     return Promise.all([...imgPromises, ...audioPromises]);
   }
 
-  /** 获取图片对象 */
+  /** 获取图片 */
   function get(key) {
     return _imgCache[key] || _makePlaceholder(key, 80, 80);
   }
 
-  /** * 播放音效或BGM
-   * @param {string} key 资源ID
-   * @param {boolean} loop 是否循环
-   */
+  /** 播放音频 */
   function play(key, loop = false) {
     const ad = _audioCache[key];
     if (ad) {
       ad.loop = loop;
-      ad.currentTime = 0; // 每次播放从头开始（解决音效重叠）
-      ad.play().catch(e => {
-        // 捕获浏览器自动播放拦截错误
-        console.warn("音频播放被浏览器拦截，请确保先点击页面", e);
-      });
+      ad.currentTime = 0;
+      ad.play().catch(e => console.warn("音频播放被拦截:", e));
     }
   }
 
@@ -72,7 +65,6 @@ const AssetLoader = (() => {
     }
   }
 
-  /** 占位符生成逻辑 */
   function _makePlaceholder(label, w, h) {
     const c = document.createElement('canvas');
     c.width = w; c.height = h;
