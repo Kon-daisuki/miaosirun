@@ -1,8 +1,6 @@
 /**
  * main.js
- * 入口：屏幕切换 + 资源加载 + Game 实例管理
  */
-
 (async () => {
   /* ── DOM 引用 ── */
   const screens = {
@@ -10,6 +8,7 @@
     howto:    document.getElementById('screen-howto'),
     game:     document.getElementById('screen-game'),
     gameover: document.getElementById('screen-gameover'),
+    buff:     document.getElementById('buff-modal')
   };
 
   const btnStart   = document.getElementById('btn-start');
@@ -17,58 +16,60 @@
   const btnBack    = document.getElementById('btn-back');
   const btnRestart = document.getElementById('btn-restart');
   const btnMenu    = document.getElementById('btn-menu');
-  const finalScore = document.getElementById('final-score');
-  const finalCombo = document.getElementById('final-combo');
 
-  /* ── 屏幕切换 ── */
+  /* ── 屏幕切换函数 ── */
   function showScreen(name) {
-    Object.values(screens).forEach(s => s.classList.remove('active'));
-    screens[name].classList.add('active');
+    console.log("切换到屏幕:", name);
+    // 隐藏所有屏幕
+    Object.values(screens).forEach(s => {
+      if(s) s.classList.remove('active');
+    });
+    // 显示目标屏幕
+    if(screens[name]) {
+      screens[name].classList.add('active');
+    }
   }
 
   /* ── 资源加载 ── */
-  btnStart.textContent = '加载中…';
-  btnStart.disabled = true;
-
-  try {
-    await AssetLoader.load(ASSET_MANIFEST);
-  } catch (e) {
-    console.warn('资源加载失败（将使用占位符）', e);
+  if (btnStart) {
+    btnStart.textContent = '加载中...';
+    btnStart.disabled = true;
   }
 
-  btnStart.textContent = '开始游戏';
-  btnStart.disabled = false;
+  try {
+    // 假设 ASSET_MANIFEST 在 assetLoader.js 里定义
+    await AssetLoader.load(ASSET_MANIFEST);
+    console.log("资源加载成功");
+  } catch (e) {
+    console.error("资源加载异常:", e);
+  } finally {
+    if (btnStart) {
+      btnStart.textContent = '开始游戏';
+      btnStart.disabled = false;
+    }
+  }
 
-  /* ── Game 实例 ── */
+  /* ── 初始化游戏 ── */
   const canvas = document.getElementById('gameCanvas');
-  const game   = new Game(canvas);
+  const game = new Game(canvas);
 
   game.onGameOver = () => {
     const result = game.getResult();
-    finalScore.textContent = result.score;
-    finalCombo.textContent = result.maxCombo;
+    document.getElementById('final-score').textContent = result.score;
+    document.getElementById('final-combo').textContent = result.maxCombo;
     showScreen('gameover');
   };
 
-  /* ── 按钮绑定 ── */
-  btnStart.addEventListener('click', () => {
-    showScreen('game');
-    game.start();
-  });
+  /* ── 按钮事件绑定 (增加空值保护) ── */
+  if(btnStart) btnStart.onclick = () => { showScreen('game'); game.start(); };
+  if(btnHowto) btnHowto.onclick = () => showScreen('howto');
+  if(btnBack)  btnBack.onclick  = () => showScreen('start');
+  if(btnRestart) btnRestart.onclick = () => { showScreen('game'); game.start(); };
+  if(btnMenu) btnMenu.onclick = () => { game.stop(); showScreen('start'); };
 
-  btnHowto.addEventListener('click', () => showScreen('howto'));
-  btnBack.addEventListener('click',  () => showScreen('start'));
+  // 暴露给全局方便调试
+  window.gameInstance = game;
 
-  btnRestart.addEventListener('click', () => {
-    showScreen('game');
-    game.start();
-  });
-
-  btnMenu.addEventListener('click', () => {
-    game.stop();
-    showScreen('start');
-  });
-
-  /* ── 防止移动端默认滚动 ── */
-  document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+  /* ── 基础交互保护 ── */
+  document.addEventListener('contextmenu', e => e.preventDefault());
 })();
