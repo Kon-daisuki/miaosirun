@@ -1,3 +1,6 @@
+/* =====================
+   全局 & 字体
+===================== */
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700;900&family=Orbitron:wght@700;900&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -14,58 +17,246 @@
   --gold:       #ffd700;
 }
 
-body {
-  width: 100%; height: 100%; overflow: hidden;
-  background: var(--bg-dark); color: var(--text);
-  font-family: 'Noto Sans SC', sans-serif; touch-action: none;
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--bg-dark);
+  color: var(--text);
+  font-family: 'Noto Sans SC', sans-serif;
+  touch-action: none;
+  -webkit-user-select: none; user-select: none;
 }
 
 #app { width: 100%; height: 100%; position: relative; }
 
+/* =====================
+   屏幕切换系统
+===================== */
 .screen {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
   opacity: 0; pointer-events: none;
   transition: opacity 0.4s ease;
+  z-index: 10;
 }
 .screen.active { opacity: 1; pointer-events: all; }
 
-/* 按钮通用 */
+/* =====================
+   启动画面 (Start Screen)
+===================== */
+#screen-start {
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(0,240,255,0.08) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 50%, rgba(255,58,255,0.08) 0%, transparent 60%),
+    var(--bg-dark);
+}
+
+.start-content {
+  display: flex; flex-direction: column; align-items: center; gap: 24px;
+  text-align: center;
+}
+
+.game-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(2.4rem, 6vw, 4.5rem);
+  font-weight: 900;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 0.08em;
+  filter: drop-shadow(0 0 20px rgba(0,240,255,0.4));
+  animation: titlePulse 3s ease-in-out infinite;
+}
+
+@keyframes titlePulse {
+  0%,100% { filter: drop-shadow(0 0 20px rgba(0,240,255,0.4)); }
+  50%      { filter: drop-shadow(0 0 40px rgba(0,240,255,0.8)) drop-shadow(0 0 60px rgba(255,58,255,0.3)); }
+}
+
+.game-subtitle {
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(0.7rem, 2vw, 1rem);
+  letter-spacing: 0.4em;
+  color: var(--text-dim);
+  margin-top: -16px;
+}
+
+/* =====================
+   按钮通用样式
+===================== */
 .btn-primary, .btn-secondary {
-  padding: 14px 48px; border: none; border-radius: 4px;
-  font-family: 'Noto Sans SC', sans-serif; font-size: 1.05rem; font-weight: 700;
-  cursor: pointer; transition: 0.2s; min-width: 200px;
+  padding: 14px 48px;
+  border: none; border-radius: 4px;
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: 1.05rem; font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.2s, background 0.3s;
+  min-width: 200px;
 }
-.btn-primary { background: linear-gradient(90deg, var(--accent), #0080cc); color: #000; box-shadow: 0 0 20px rgba(0,240,255,0.4); }
-.btn-primary:hover:not(:disabled) { transform: scale(1.04); box-shadow: 0 0 32px rgba(0,240,255,0.7); }
-.btn-primary:disabled { background: #333; color: #888; box-shadow: none; cursor: not-allowed; }
+.btn-primary {
+  background: linear-gradient(90deg, var(--accent), #0080cc);
+  color: #000;
+  box-shadow: 0 0 20px rgba(0,240,255,0.4);
+}
+.btn-primary:hover:not(:disabled) { 
+  transform: scale(1.04); 
+  box-shadow: 0 0 32px rgba(0,240,255,0.7); 
+}
+.btn-primary:active:not(:disabled) { transform: scale(0.97); }
 
-.btn-secondary { background: transparent; border: 1px solid var(--text-dim); color: var(--text-dim); }
+/* 禁用状态（用于Buff选择确认键） */
+.btn-primary:disabled {
+  background: #333;
+  color: #666;
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
 
-/* Buff 弹窗 */
-#buff-modal { background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); z-index: 1000; }
-.buff-container { text-align: center; width: 90%; max-width: 600px; }
-.buff-container h2 { color: var(--gold); text-shadow: 0 0 15px rgba(255,215,0,0.5); margin-bottom: 20px; }
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--text-dim);
+  color: var(--text-dim);
+}
+.btn-secondary:hover  { border-color: var(--accent); color: var(--accent); transform: scale(1.03); }
 
-.buff-cards { display: flex; flex-direction: column; gap: 12px; }
+/* =====================
+   游戏说明画面 (How-to Screen)
+===================== */
+#screen-howto { background: rgba(10,10,20,0.97); }
+.howto-content { max-width: 480px; width: 90%; display: flex; flex-direction: column; gap: 24px; align-items: center; }
+.howto-content h2 { font-family: 'Orbitron', sans-serif; font-size: 1.6rem; color: var(--accent); }
+.howto-list { width: 100%; display: flex; flex-direction: column; gap: 16px; }
+.howto-item {
+  display: flex; align-items: center; gap: 16px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px; padding: 14px 18px;
+}
+.howto-item .icon { font-size: 1.8rem; }
+.howto-item p { font-size: 0.92rem; color: var(--text); line-height: 1.5; }
+
+/* =====================
+   游戏画布 (Game Canvas)
+===================== */
+#screen-game { background: var(--bg-dark); }
+#gameCanvas { display: block; width: 100%; height: 100%; }
+
+/* =====================
+   结算画面 (Game Over)
+===================== */
+#screen-gameover { background: rgba(10,10,20,0.97); }
+.gameover-content { display: flex; flex-direction: column; align-items: center; gap: 28px; text-align: center; }
+#gameover-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(1.8rem, 5vw, 3rem);
+  color: var(--danger);
+  text-shadow: 0 0 30px rgba(255,26,26,0.6);
+}
+.score-display { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.score-display .label { font-size: 0.85rem; color: var(--text-dim); letter-spacing: 0.1em; }
+.score-display .score-value {
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(2rem, 6vw, 3.5rem);
+  font-weight: 900;
+  color: var(--gold);
+  text-shadow: 0 0 20px rgba(255,215,0,0.5);
+}
+
+/* =====================
+   肉鸽 Buff 选择界面 (Buff Modal)
+===================== */
+#buff-modal {
+  background: rgba(0, 0, 0, 0.85); /* 半透明黑底 */
+  backdrop-filter: blur(10px);    /* 背景模糊 */
+  z-index: 1000;                  /* 确保在最顶层 */
+}
+
+.buff-container {
+  text-align: center;
+  color: var(--text);
+  width: 90%;
+  max-width: 600px;
+  animation: modalPop 0.4s cubic-bezier(0.17, 0.67, 0.83, 0.67);
+}
+
+@keyframes modalPop {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.buff-container h2 {
+  color: var(--gold);
+  font-family: 'Orbitron', sans-serif;
+  margin-bottom: 10px;
+  text-shadow: 0 0 15px rgba(255,215,0,0.4);
+}
+
+.buff-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-top: 25px;
+}
+
 .buff-card {
-  background: rgba(255,255,255,0.05); border: 2px solid rgba(0,240,255,0.3);
-  border-radius: 10px; padding: 15px; cursor: pointer; transition: 0.3s; text-align: left;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid rgba(0, 240, 255, 0.2);
+  border-radius: 12px;
+  padding: 16px 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: left;
+  position: relative;
+  overflow: hidden;
 }
-.buff-card h3 { color: var(--accent); margin-bottom: 5px; font-size: 1.1rem; }
-.buff-card p { color: #ccc; font-size: 0.9rem; }
+
+/* 悬停效果 */
+.buff-card:hover {
+  background: rgba(0, 240, 255, 0.1);
+  border-color: rgba(0, 240, 255, 0.5);
+}
 
 /* 选中高亮状态 */
 .buff-card.selected {
   border-color: var(--gold);
-  background: rgba(255,215,0,0.15);
-  box-shadow: 0 0 20px rgba(255,215,0,0.3);
-  transform: translateX(10px);
+  background: rgba(255, 215, 0, 0.15);
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+  transform: translateX(10px); /* 选中时轻轻右移 */
 }
 
-/* 标题动画等其他原有 CSS ... */
-.game-title {
-  font-family: 'Orbitron', sans-serif; font-size: clamp(2.4rem, 6vw, 4.5rem); font-weight: 900;
-  background: linear-gradient(90deg, var(--accent), var(--accent2));
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+.buff-card.selected::after {
+  content: '✓';
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--gold);
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.buff-card h3 {
+  margin: 0 0 6px 0;
+  color: var(--accent);
+  font-size: 1.15rem;
+  letter-spacing: 0.05em;
+}
+
+.buff-card p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #ccc;
+  line-height: 1.4;
+}
+
+/* =====================
+   移动端适配
+===================== */
+@media (max-width: 480px) {
+  .btn-primary, .btn-secondary { padding: 12px 32px; font-size: 0.95rem; min-width: 160px; }
+  .game-title { font-size: 2.5rem; }
+  .buff-card { padding: 12px 15px; }
+  .buff-card h3 { font-size: 1rem; }
+  .buff-card p { font-size: 0.8rem; }
 }
