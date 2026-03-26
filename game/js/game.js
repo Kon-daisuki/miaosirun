@@ -1,6 +1,35 @@
 /**
  * game.js
+ * 优化点：
+ * 1. 限制 Boss 同时只能存在一个。
+ * 2. Boss 出现后，其所在的泳道不再生成普通小怪。
+ * 3. 【新增】加入音频管理，实现 BGM、击中和扣血音效。
  */
+
+// --- 【新增】独立的音频管理对象，防止干扰原有的资源加载逻辑 ---
+const AudioSys = {
+  bgm: new Audio('assets/audio/bgm.mp3'),
+  hit: new Audio('assets/audio/hit.mp3'),
+  miss: new Audio('assets/audio/miss.mp3'),
+  playBgm() {
+    this.bgm.loop = true;      // 循环播放
+    this.bgm.currentTime = 0;
+    this.bgm.play().catch(e => console.warn('BGM无法自动播放:', e));
+  },
+  stopBgm() {
+    this.bgm.pause();
+  },
+  playHit() {
+    // 使用 cloneNode 保证玩家连续快速点击时，音效可以叠加而不会互相打断
+    const s = this.hit.cloneNode();
+    s.play().catch(e => console.warn('Hit音效播放失败:', e));
+  },
+  playMiss() {
+    const s = this.miss.cloneNode();
+    s.play().catch(e => console.warn('Miss音效播放失败:', e));
+  }
+};
+// --------------------------------------------------------
 
 class Game {
   constructor(canvas) {
@@ -11,7 +40,7 @@ class Game {
     window.addEventListener('resize', () => this._resize());
 
     this.player   = new Player(canvas);
-    this.monsters = [];
+    this.monsters =[];
     this.boss     = null;
 
     this.score    = 0;
@@ -35,7 +64,7 @@ class Game {
 
   start() {
     this.score    = 0; this.combo = 0; this.maxCombo = 0;
-    this.monsters = []; this.boss = null;
+    this.monsters =[]; this.boss = null;
     this._spawnTimer    = 0;
     this._spawnInterval = 2200;
     this._bossTimer     = 0;
@@ -47,12 +76,19 @@ class Game {
 
     this._running  = true;
     this._lastTime = performance.now();
+    
+    // 【新增】开始游戏，播放全程 BGM
+    AudioSys.playBgm();
+    
     this._loop(this._lastTime);
   }
 
   stop() {
     this._running = false;
     if (this._rafId) cancelAnimationFrame(this._rafId);
+    
+    // 【新增】停止游戏，暂停 BGM
+    AudioSys.stopBgm();
   }
 
   getResult() { return { score: this.score, maxCombo: this.maxCombo }; }
@@ -99,8 +135,11 @@ class Game {
       if ((m.type === 'normal' || m.type === 'cloud') && m.passed && !m._damageDone) {
         m._damageDone = true;
         this.player.hit();
-        AssetLoader.play('miss'); // 怪物漏掉，播放 miss 音效
         this.combo = 0;
+        
+        // 【新增】怪物穿透防线导致扣血时，播放 Miss 音效
+        AudioSys.playMiss();
+        
         if (this.player.isDead()) this._gameOver();
       }
     }
@@ -111,9 +150,12 @@ class Game {
         this._onBossKilled();
       } else if (this.boss.failed) {
         this.player.hit();
-        AssetLoader.play('miss'); // Boss 逃走，播放 miss 音效
         this.combo = 0;
         this.boss  = null;
+        
+        // 【新增】Boss 击败失败导致扣血时，播放 Miss 音效
+        AudioSys.playMiss();
+        
         if (this.player.isDead()) this._gameOver();
       }
     }
@@ -123,9 +165,11 @@ class Game {
 
   _spawnMonster() {
     let availableLanes = ['top', 'bottom'];
+
     if (this.boss) {
       availableLanes = availableLanes.filter(l => l !== this.boss.lane);
     }
+
     if (availableLanes.length === 0) return;
 
     const lane = availableLanes[Math.floor(Math.random() * availableLanes.length)];
@@ -136,7 +180,8 @@ class Game {
   }
 
   _spawnBoss() {
-    if (this.boss) return;
+    if (this.boss) return; 
+
     const lane = Math.random() < 0.5 ? 'top' : 'bottom';
     this.boss = new BossMonster({
       lane, 
@@ -153,7 +198,6 @@ class Game {
     this.combo += 5;
     this.maxCombo = Math.max(this.maxCombo, this.combo);
     UI.spawnComboAnim(this.canvas.width / 2, this.canvas.height / 2 - 40, `BOSS +${bonus}`, '#ffd700');
-    AssetLoader.play('hit'); // 击杀 Boss 播放打击感较强的 hit
     Effects.shake(12, 600);
     this.boss = null;
   }
@@ -189,10 +233,13 @@ class Game {
     if (this.boss && !this.boss._entering && this.boss.isInLane(lane)) {
       this.boss.click();
       this.player.bossHit(lane);
-      AssetLoader.play('hit'); // 点击 Boss 播放 hit 音效
       this.score += 10;
       this.combo++;
       this.maxCombo = Math.max(this.maxCombo, this.combo);
+      
+      // 【新增】成功攻击 Boss 时播放 Hit 音效
+      AudioSys.playHit();
+      
       return;
     }
 
@@ -210,12 +257,15 @@ class Game {
 
       if (m.x < playerPos + HIT_RANGE) {
         m.hit();
-        AssetLoader.play('hit'); // 成功击中普通怪
         hit = true;
         this.combo++;
         this.maxCombo = Math.max(this.maxCombo, this.combo);
         const pts = m.type === 'cloud' ? 150 : 100;
         this.score += pts + (this.combo > 5 ? this.combo * 5 : 0);
+        
+        // 【新增】成功击中小怪时播放 Hit 音效
+        AudioSys.playHit();
+        
         UI.spawnComboAnim(m.x, m.y - 50, `+${pts}`, m.type === 'cloud' ? '#cc88ff' : '#00f0ff');
         
         if (this.combo % 5 === 0) {
@@ -225,7 +275,6 @@ class Game {
     }
 
     if (!hit && !this.boss) {
-      AssetLoader.play('miss'); // 空挥播放 miss 音效
       this.combo = 0;
     }
   }
@@ -233,6 +282,10 @@ class Game {
   _gameOver() {
     this._running = false;
     if (this._rafId) cancelAnimationFrame(this._rafId);
+    
+    // 【新增】游戏结束时停止 BGM
+    AudioSys.stopBgm();
+    
     if (typeof this.onGameOver === 'function') this.onGameOver();
   }
 
@@ -290,4 +343,3 @@ class Game {
     if (this.player) this.player.resize(this.canvas);
   }
 }
-
