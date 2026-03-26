@@ -381,4 +381,81 @@ class Game {
       }
     }
 
-    if (!hit && !this.boss)
+    if (!hit && !this.boss) {
+      this.combo = 0;
+    }
+  }
+
+  _gameOver() {
+    this._running = false;
+    if (this._rafId) cancelAnimationFrame(this._rafId);
+    AudioSys.stopBgm();
+    if (typeof this.onGameOver === 'function') this.onGameOver();
+  }
+
+  _draw() {
+    const ctx = this.ctx;
+    const cw  = this.canvas.width;
+    const ch  = this.canvas.height;
+
+    const shake = Effects.getShakeOffset();
+    ctx.save();
+    ctx.translate(shake.x, shake.y);
+
+    ctx.drawImage(AssetLoader.get('background'), 0, 0, cw, ch);
+
+    ctx.fillStyle = 'rgba(0,200,255,0.04)';
+    ctx.fillRect(0, 0, cw, ch / 2);
+    ctx.fillStyle = 'rgba(255,100,200,0.04)';
+    ctx.fillRect(0, ch / 2, cw, ch / 2);
+
+    if (this._tapFlash) {
+      const a = (this._tapFlash.timer / 200) * 0.22;
+      ctx.fillStyle = this._tapFlash.lane === 'top'
+        ? `rgba(0,220,255,${a})` : `rgba(255,120,220,${a})`;
+      ctx.fillRect(0, this._tapFlash.lane === 'top' ? 0 : ch / 2, cw, ch / 2);
+    }
+
+    ctx.save();
+    ctx.setLineDash([16, 10]);
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, ch / 2);
+    ctx.lineTo(cw, ch / 2);
+    ctx.stroke();
+    ctx.restore();
+
+    Effects.draw(ctx);
+    for (const m of this.monsters) m.draw(ctx);
+    if (this.boss) this.boss.draw(ctx);
+    this.player.draw(ctx);
+
+    UI.draw(ctx, { cw, ch, score: this.score, combo: this.combo,
+      maxCombo: this.maxCombo, hp: this.player.hp, maxHp: this.player.maxHp, boss: this.boss });
+
+    // 【新增】如果玩家拥有护盾，在左上角(血条下方)绘制护盾层数提示
+    if (this.stats.shield > 0) {
+      ctx.save();
+      ctx.fillStyle = '#00f0ff';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.shadowColor = '#000';
+      ctx.shadowBlur = 4;
+      ctx.fillText(`🛡️ 护盾: ${this.stats.shield}`, 20, 80); 
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  _resize() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    this.canvas.width        = w;
+    this.canvas.height       = h;
+    this.canvas.style.width  = w + 'px';
+    this.canvas.style.height = h + 'px';
+    if (this.player) this.player.resize(this.canvas);
+  }
+}
