@@ -1,192 +1,149 @@
-/* =====================
-   全局 & 字体
-===================== */
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700;900&family=Orbitron:wght@700;900&display=swap');
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>节奏猎手</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* 横屏提示遮罩（竖屏时显示） */
+    #rotate-tip {
+      display: none;
+      position: fixed; 
+      inset: 0; 
+      z-index: 9999;
+      background: #0a0a14;
+      flex-direction: column;
+      align-items: center; 
+      justify-content: center;
+      gap: 20px; 
+      color: #e8e8ff; 
+      font-family: sans-serif;
+      text-align: center;
+      /* 确保遮罩层不响应点击，防止干扰底层 */
+      pointer-events: all;
+    }
+    #rotate-tip.show { display: flex; }
+    #rotate-tip .icon { font-size: 60px; animation: spin 1.5s ease-in-out infinite alternate; }
+    @keyframes spin {
+      from { transform: rotate(-30deg); }
+      to   { transform: rotate(30deg);  }
+    }
+    #rotate-tip p { font-size: 1.1rem; color: #aaa; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="screen-start" class="screen active">
+      <div class="start-content">
+        <h1 class="game-title">节奏猎手</h1>
+        <p class="game-subtitle">RHYTHM HUNTER</p>
+        <button id="btn-start" class="btn-primary">开始游戏</button>
+        <button id="btn-howto" class="btn-secondary">游戏说明</button>
+      </div>
+    </div>
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    <div id="screen-howto" class="screen">
+      <div class="howto-content">
+        <h2>游戏说明</h2>
+        <div class="howto-list">
+          <div class="howto-item">
+            <span class="icon">👆</span>
+            <p>点击上方/下方区域消灭对应区域的怪物</p>
+          </div>
+          <div class="howto-item">
+            <span class="icon">👻</span>
+            <p><b>普通怪</b>：靠近时隐身，及时点击消灭</p>
+          </div>
+          <div class="howto-item">
+            <span class="icon">☁️</span>
+            <p><b>云雾怪</b>：云雾环绕，隐身前有明显提示</p>
+          </div>
+          <div class="howto-item">
+            <span class="icon">💀</span>
+            <p><b>Boss怪</b>：疯狂连击对应区域消耗血量</p>
+          </div>
+        </div>
+        <button id="btn-back" class="btn-secondary">返回</button>
+      </div>
+    </div>
 
-:root {
-  --bg-dark:    #0a0a14;
-  --bg-mid:     #11112a;
-  --accent:     #00f0ff;
-  --accent2:    #ff3aff;
-  --warn:       #ff6b00;
-  --danger:     #ff1a1a;
-  --text:       #e8e8ff;
-  --text-dim:   #7070aa;
-  --gold:       #ffd700;
-}
+    <div id="screen-game" class="screen">
+      <canvas id="gameCanvas"></canvas>
+    </div>
 
-html, body {
-  width: 100%; height: 100%;
-  overflow: hidden;
-  background: var(--bg-dark);
-  color: var(--text);
-  font-family: 'Noto Sans SC', sans-serif;
-  touch-action: none;
-  -webkit-user-select: none; user-select: none;
-}
+    <div id="screen-gameover" class="screen">
+      <div class="gameover-content">
+        <h2 id="gameover-title">游戏结束</h2>
+        <div class="score-display">
+          <span class="label">最终得分</span>
+          <span id="final-score" class="score-value">0</span>
+        </div>
+        <div class="score-display">
+          <span class="label">最高连击</span>
+          <span id="final-combo" class="score-value">0</span>
+        </div>
+        <button id="btn-restart" class="btn-primary">再来一局</button>
+        <button id="btn-menu" class="btn-secondary">主菜单</button>
+      </div>
+    </div>
+  </div>
 
-#app { width: 100%; height: 100%; position: relative; }
+  <div id="rotate-tip">
+    <div class="icon">📱➡️</div>
+    <p>请横屏游玩</p>
+  </div>
 
-/* =====================
-   屏幕切换
-===================== */
-.screen {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  opacity: 0; pointer-events: none;
-  transition: opacity 0.4s ease;
-}
-.screen.active { opacity: 1; pointer-events: all; }
+  <script src="js/assetLoader.js"></script>
+  <script src="js/effects.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/monsters/normalMonster.js"></script>
+  <script src="js/monsters/cloudMonster.js"></script>
+  <script src="js/monsters/bossMonster.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/main.js"></script>
 
-/* =====================
-   启动画面
-===================== */
-#screen-start {
-  background:
-    radial-gradient(ellipse at 20% 50%, rgba(0,240,255,0.08) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 50%, rgba(255,58,255,0.08) 0%, transparent 60%),
-    var(--bg-dark);
-}
+  <script>
+    /**
+     * 屏幕方向管理逻辑
+     */
+    (function() {
+      const tip = document.getElementById('rotate-tip');
+      const landscapeQuery = window.matchMedia("(orientation: landscape)");
 
-.start-content {
-  display: flex; flex-direction: column; align-items: center; gap: 24px;
-  text-align: center;
-}
+      function handleOrientationChange(mql) {
+        if (mql.matches) {
+          // 当前是横屏
+          tip.classList.remove('show');
+          // 如果游戏已经初始化，强制更新一次 Canvas 尺寸
+          if (window.gameInstance && typeof window.gameInstance._resize === 'function') {
+            window.gameInstance._resize();
+          }
+        } else {
+          // 当前是竖屏
+          tip.classList.add('show');
+        }
+      }
 
-.game-title {
-  font-family: 'Orbitron', sans-serif;
-  font-size: clamp(2.4rem, 6vw, 4.5rem);
-  font-weight: 900;
-  background: linear-gradient(90deg, var(--accent), var(--accent2));
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  background-clip: text;
-  letter-spacing: 0.08em;
-  filter: drop-shadow(0 0 20px rgba(0,240,255,0.4));
-  animation: titlePulse 3s ease-in-out infinite;
-}
+      // 监听媒体查询变化 (适配新旧浏览器)
+      if (landscapeQuery.addEventListener) {
+        landscapeQuery.addEventListener("change", handleOrientationChange);
+      } else {
+        landscapeQuery.addListener(handleOrientationChange);
+      }
 
-@keyframes titlePulse {
-  0%,100% { filter: drop-shadow(0 0 20px rgba(0,240,255,0.4)); }
-  50%      { filter: drop-shadow(0 0 40px rgba(0,240,255,0.8)) drop-shadow(0 0 60px rgba(255,58,255,0.3)); }
-}
+      // 初始检查
+      handleOrientationChange(landscapeQuery);
 
-.game-subtitle {
-  font-family: 'Orbitron', sans-serif;
-  font-size: clamp(0.7rem, 2vw, 1rem);
-  letter-spacing: 0.4em;
-  color: var(--text-dim);
-  margin-top: -16px;
-}
-
-/* =====================
-   按钮
-===================== */
-.btn-primary, .btn-secondary {
-  padding: 14px 48px;
-  border: none; border-radius: 4px;
-  font-family: 'Noto Sans SC', sans-serif;
-  font-size: 1.05rem; font-weight: 700;
-  cursor: pointer;
-  transition: transform 0.1s, box-shadow 0.2s;
-  min-width: 200px;
-}
-.btn-primary {
-  background: linear-gradient(90deg, var(--accent), #0080cc);
-  color: #000;
-  box-shadow: 0 0 20px rgba(0,240,255,0.4);
-}
-.btn-primary:hover  { transform: scale(1.04); box-shadow: 0 0 32px rgba(0,240,255,0.7); }
-.btn-primary:active { transform: scale(0.97); }
-
-.btn-secondary {
-  background: transparent;
-  border: 1px solid var(--text-dim);
-  color: var(--text-dim);
-}
-.btn-secondary:hover  { border-color: var(--accent); color: var(--accent); transform: scale(1.03); }
-.btn-secondary:active { transform: scale(0.97); }
-
-/* =====================
-   说明画面
-===================== */
-#screen-howto {
-  background: rgba(10,10,20,0.97);
-}
-
-.howto-content {
-  max-width: 480px; width: 90%;
-  display: flex; flex-direction: column; gap: 24px; align-items: center;
-}
-
-.howto-content h2 {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 1.6rem;
-  color: var(--accent);
-}
-
-.howto-list {
-  width: 100%;
-  display: flex; flex-direction: column; gap: 16px;
-}
-
-.howto-item {
-  display: flex; align-items: center; gap: 16px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 8px;
-  padding: 14px 18px;
-}
-.howto-item .icon { font-size: 1.8rem; }
-.howto-item p { font-size: 0.92rem; color: var(--text); line-height: 1.5; }
-
-/* =====================
-   游戏画面
-===================== */
-#screen-game { background: var(--bg-dark); }
-
-#gameCanvas {
-  display: block;
-  width: 100%; height: 100%;
-  image-rendering: pixelated;
-}
-
-/* =====================
-   结算画面
-===================== */
-#screen-gameover {
-  background: rgba(10,10,20,0.97);
-}
-
-.gameover-content {
-  display: flex; flex-direction: column; align-items: center; gap: 28px;
-  text-align: center;
-}
-
-#gameover-title {
-  font-family: 'Orbitron', sans-serif;
-  font-size: clamp(1.8rem, 5vw, 3rem);
-  color: var(--danger);
-  text-shadow: 0 0 30px rgba(255,26,26,0.6);
-}
-
-.score-display {
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-}
-.score-display .label  { font-size: 0.85rem; color: var(--text-dim); letter-spacing: 0.1em; }
-.score-display .score-value {
-  font-family: 'Orbitron', sans-serif;
-  font-size: clamp(2rem, 6vw, 3.5rem);
-  font-weight: 900;
-  color: var(--gold);
-  text-shadow: 0 0 20px rgba(255,215,0,0.5);
-}
-
-/* =====================
-   移动端适配
-===================== */
-@media (max-width: 480px) {
-  .btn-primary, .btn-secondary { padding: 12px 32px; font-size: 0.95rem; min-width: 160px; }
-}
+      // 尝试锁定方向（可选）
+      if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock('landscape').catch(() => {
+          console.log("浏览器不支持或未开启全屏，无法锁定方向");
+        });
+      }
+    })();
+  </script>
+</body>
+</html>
 
