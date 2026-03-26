@@ -87,6 +87,17 @@
         <button id="btn-menu" class="btn-secondary">主菜单</button>
       </div>
     </div>
+    
+    <!-- 【新增】肉鸽奖励选择遮罩层 (复用 screen 类) -->
+    <div id="buff-modal" class="screen">
+      <div class="buff-container">
+        <h2>🏆 击败 Boss 奖励</h2>
+        <p>请选择一项能力加成：</p>
+        <div class="buff-cards" id="buff-cards">
+          <!-- JS 会自动在这里生成 3 个卡片 -->
+        </div>
+      </div>
+    </div>
   </div>
 
 
@@ -97,6 +108,10 @@
   <script src="js/monsters/cloudMonster.js"></script>
   <script src="js/monsters/bossMonster.js"></script>
   <script src="js/ui.js"></script>
+  
+  <!-- 【新增】引入独立编写的 Buff 管理器 -->
+  <script src="buffs/buffManager.js"></script>
+  
   <script src="js/game.js"></script>
   <script src="js/main.js"></script>
 
@@ -142,4 +157,3 @@
   </script>
 </body>
 </html>
-
