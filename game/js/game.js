@@ -209,11 +209,15 @@ class Game {
     // Boss 连击
     if (this.boss && !this.boss._entering && this.boss.isInLane(lane)) {
       this.boss.click();
+      this.player.bossHit(lane);
       this.score += 10;
       this.combo++;
       this.maxCombo = Math.max(this.maxCombo, this.combo);
       return;
     }
+
+    // 触发玩家攻击动画
+    this.player.attack(lane);
 
     // 小怪点击
     let hit = false;
@@ -296,10 +300,14 @@ class Game {
 
   _resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.canvas.width  = window.innerWidth  * dpr;
-    this.canvas.height = window.innerHeight * dpr;
-    this.canvas.style.width  = window.innerWidth  + 'px';
-    this.canvas.style.height = window.innerHeight + 'px';
+    // 强制横屏尺寸：取宽高中较大值作为宽
+    const w = Math.max(window.innerWidth, window.innerHeight);
+    const h = Math.min(window.innerWidth, window.innerHeight);
+    this.canvas.width  = w * dpr;
+    this.canvas.height = h * dpr;
+    this.canvas.style.width  = w + 'px';
+    this.canvas.style.height = h + 'px';
     if (this.player) this.player.resize(this.canvas);
   }
 }
+
