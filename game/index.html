@@ -3,8 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="screen-orientation" content="landscape" />
   <title>节奏猎手</title>
   <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* 竖屏时旋转整个页面 */
+    @media (orientation: portrait) {
+      #app {
+        transform-origin: top left;
+        transform: rotate(90deg) translateY(-100%);
+        width: 100vh;
+        height: 100vw;
+        position: fixed;
+        top: 0; left: 0;
+      }
+    }
+  </style>
 </head>
 <body>
   <div id="app">
@@ -78,4 +92,3 @@
   <script src="js/main.js"></script>
 </body>
 </html>
-
