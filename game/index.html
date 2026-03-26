@@ -2,19 +2,26 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>节奏猎手</title>
   <link rel="stylesheet" href="css/style.css" />
   <style>
     /* 横屏提示遮罩（竖屏时显示） */
     #rotate-tip {
       display: none;
-      position: fixed; inset: 0; z-index: 9999;
+      position: fixed; 
+      inset: 0; 
+      z-index: 9999;
       background: #0a0a14;
       flex-direction: column;
-      align-items: center; justify-content: center;
-      gap: 20px; color: #e8e8ff; font-family: sans-serif;
+      align-items: center; 
+      justify-content: center;
+      gap: 20px; 
+      color: #e8e8ff; 
+      font-family: sans-serif;
       text-align: center;
+      /* 确保遮罩层不响应点击，防止干扰底层 */
+      pointer-events: all;
     }
     #rotate-tip.show { display: flex; }
     #rotate-tip .icon { font-size: 60px; animation: spin 1.5s ease-in-out infinite alternate; }
@@ -27,7 +34,6 @@
 </head>
 <body>
   <div id="app">
-    <!-- 启动画面 -->
     <div id="screen-start" class="screen active">
       <div class="start-content">
         <h1 class="game-title">节奏猎手</h1>
@@ -37,7 +43,6 @@
       </div>
     </div>
 
-    <!-- 说明画面 -->
     <div id="screen-howto" class="screen">
       <div class="howto-content">
         <h2>游戏说明</h2>
@@ -63,12 +68,10 @@
       </div>
     </div>
 
-    <!-- 游戏画面 -->
     <div id="screen-game" class="screen">
       <canvas id="gameCanvas"></canvas>
     </div>
 
-    <!-- 结算画面 -->
     <div id="screen-gameover" class="screen">
       <div class="gameover-content">
         <h2 id="gameover-title">游戏结束</h2>
@@ -86,7 +89,6 @@
     </div>
   </div>
 
-  <!-- 竖屏提示 -->
   <div id="rotate-tip">
     <div class="icon">📱➡️</div>
     <p>请横屏游玩</p>
@@ -101,20 +103,47 @@
   <script src="js/ui.js"></script>
   <script src="js/game.js"></script>
   <script src="js/main.js"></script>
+
   <script>
-    // 尝试锁定横屏（部分浏览器支持）
-    if (screen.orientation && screen.orientation.lock) {
-      screen.orientation.lock('landscape').catch(() => {});
-    }
-    // 竖屏时显示提示，横屏时隐藏
-    const tip = document.getElementById('rotate-tip');
-    function checkOrientation() {
-      const isPortrait = window.innerHeight > window.innerWidth;
-      tip.classList.toggle('show', isPortrait);
-    }
-    window.addEventListener('resize', checkOrientation);
-    window.addEventListener('orientationchange', checkOrientation);
-    checkOrientation();
+    /**
+     * 屏幕方向管理逻辑
+     */
+    (function() {
+      const tip = document.getElementById('rotate-tip');
+      const landscapeQuery = window.matchMedia("(orientation: landscape)");
+
+      function handleOrientationChange(mql) {
+        if (mql.matches) {
+          // 当前是横屏
+          tip.classList.remove('show');
+          // 如果游戏已经初始化，强制更新一次 Canvas 尺寸
+          if (window.gameInstance && typeof window.gameInstance._resize === 'function') {
+            window.gameInstance._resize();
+          }
+        } else {
+          // 当前是竖屏
+          tip.classList.add('show');
+        }
+      }
+
+      // 监听媒体查询变化 (适配新旧浏览器)
+      if (landscapeQuery.addEventListener) {
+        landscapeQuery.addEventListener("change", handleOrientationChange);
+      } else {
+        landscapeQuery.addListener(handleOrientationChange);
+      }
+
+      // 初始检查
+      handleOrientationChange(landscapeQuery);
+
+      // 尝试锁定方向（可选）
+      if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock('landscape').catch(() => {
+          console.log("浏览器不支持或未开启全屏，无法锁定方向");
+        });
+      }
+    })();
   </script>
 </body>
 </html>
+
