@@ -1,0 +1,65 @@
+name: Build Android APK
+
+# 触发条件：当向 main 分支推送代码，或者手动点击运行按钮时触发
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    name: Build and Package APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 拉取仓库代码
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. 设置 Node.js 环境 (用于安装 Capacitor)
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 3. 设置 Java 17 环境 (Android 编译必需)
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      # 4. 初始化并在本地临时生成 Capacitor 安卓项目
+      - name: Install Capacitor and Setup Android Project
+        run: |
+          # 初始化一个临时的 Node 项目
+          npm init -y
+          
+          # 安装 Capacitor 核心和 Android 依赖
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          
+          # 初始化 Capacitor，将你的 'game' 文件夹指定为 Web 目录
+          # 应用名称为 Miaosirun，包名为 com.kondaisuki.miaosirun
+          npx cap init "Miaosirun" "com.kondaisuki.miaosirun" --web-dir game
+          
+          # 添加安卓平台并同步你的网页文件到安卓项目中
+          npx cap add android
+          npx cap sync android
+
+      # 5. 编译生成 APK
+      - name: Build APK using Gradle
+        run: |
+          cd android
+          # 赋予 Gradle 执行权限
+          chmod +x gradlew
+          # 编译生成 Debug 版本的 APK
+          ./gradlew assembleDebug
+
+      # 6. 将生成的 APK 作为 Artifact 上传，供你下载
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Miaosirun-Game-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7 # 文件保留 7 天
