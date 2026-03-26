@@ -1,3 +1,6 @@
+/**
+ * buffManager.js
+ */
 const BuffSystem = (() => {
   const allBuffs = [
     { id: 'dmg_up', name: '⚙️ 动能强化', desc: '基础点击伤害大幅提升（+2）', apply: (g) => g.stats.clickDamage += 2 },
@@ -18,6 +21,11 @@ const BuffSystem = (() => {
     const cardsContainer = document.getElementById('buff-cards');
     const confirmBtn = document.getElementById('btn-buff-confirm');
     
+    if(!modal || !cardsContainer || !confirmBtn) {
+        console.error("Buff UI elements not found!");
+        return;
+    }
+
     cardsContainer.innerHTML = '';
     confirmBtn.disabled = true;
     let selectedBuff = null;
@@ -27,7 +35,10 @@ const BuffSystem = (() => {
       card.className = 'buff-card';
       card.innerHTML = `<h3>${buff.name}</h3><p>${buff.desc}</p>`;
       card.onclick = () => {
-        Array.from(cardsContainer.children).forEach(c => c.classList.remove('selected'));
+        // 这里的 Array.from 确保在不同浏览器都能运行
+        const children = cardsContainer.getElementsByClassName('buff-card');
+        for(let child of children) child.classList.remove('selected');
+        
         card.classList.add('selected');
         selectedBuff = buff;
         confirmBtn.disabled = false;
@@ -39,6 +50,8 @@ const BuffSystem = (() => {
       if (!selectedBuff) return;
       selectedBuff.apply(game);
       modal.classList.remove('active');
+      // 清除点击事件防止重复触发
+      confirmBtn.onclick = null; 
       onSelectCallback();
     };
     modal.classList.add('active');
