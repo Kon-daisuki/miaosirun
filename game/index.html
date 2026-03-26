@@ -2,66 +2,57 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>节奏猎手</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <div id="app">
-    <!-- 启动画面 -->
+    <!-- 主菜单 -->
     <div id="screen-start" class="screen active">
-      <div class="start-content">
+      <div class="content">
         <h1 class="game-title">节奏猎手</h1>
-        <p class="game-subtitle">RHYTHM HUNTER</p>
-        <button id="btn-start" class="btn-primary">开始游戏</button>
+        <button id="btn-start" class="btn-primary">开始游戏</button><br>
         <button id="btn-howto" class="btn-secondary">游戏说明</button>
       </div>
     </div>
 
-    <!-- 说明画面 -->
+    <!-- 说明 -->
     <div id="screen-howto" class="screen">
-      <div class="howto-content">
+      <div class="content" style="color:#fff; text-align:center;">
         <h2>游戏说明</h2>
-        <div class="howto-list">
-          <div class="howto-item"><span class="icon">👆</span><p>点击上方/下方区域消灭对应区域的怪物</p></div>
-          <div class="howto-item"><span class="icon">👻</span><p>普通怪：靠近时隐身，及时点击消灭</p></div>
-          <div class="howto-item"><span class="icon">☁️</span><p>云雾怪：隐身前有明显提示</p></div>
-          <div class="howto-item"><span class="icon">💀</span><p>Boss怪：疯狂连击消耗血量</p></div>
-        </div>
+        <p style="margin:20px 0;">点击屏幕上下方消灭怪物</p>
         <button id="btn-back" class="btn-secondary">返回</button>
       </div>
     </div>
 
-    <!-- 游戏画面 -->
+    <!-- 游戏画布 -->
     <div id="screen-game" class="screen">
       <canvas id="gameCanvas"></canvas>
     </div>
 
-    <!-- 结算画面 -->
+    <!-- 结算 -->
     <div id="screen-gameover" class="screen">
-      <div class="gameover-content">
-        <h2 id="gameover-title">游戏结束</h2>
-        <div class="score-display"><span class="label">最终得分</span><span id="final-score" class="score-value">0</span></div>
-        <div class="score-display"><span class="label">最高连击</span><span id="final-combo" class="score-value">0</span></div>
-        <button id="btn-restart" class="btn-primary">再来一局</button>
+      <div class="content">
+        <h2 style="color:red; font-size:2rem;">游戏结束</h2>
+        <p>得分: <span id="final-score">0</span></p>
+        <p>最高连击: <span id="final-combo">0</span></p>
+        <button id="btn-restart" class="btn-primary">再来一局</button><br>
         <button id="btn-menu" class="btn-secondary">主菜单</button>
       </div>
     </div>
-    
-    <!-- 肉鸽奖励选择遮罩层 -->
+
+    <!-- Buff 三选一 -->
     <div id="buff-modal" class="screen">
-      <div class="buff-container">
-        <h2>🏆 击败 Boss 奖励</h2>
-        <p>请选择一项能力加成：</p>
-        <div class="buff-cards" id="buff-cards">
-          <!-- JS 自动生成 -->
-        </div>
-        <!-- 确认按钮 -->
-        <button id="btn-buff-confirm" class="btn-primary" disabled style="margin-top: 25px;">确认选择</button>
+      <div class="content">
+        <h2 style="color:#ffd700;">击败 BOSS 奖励</h2>
+        <div id="buff-cards"></div>
+        <button id="btn-buff-confirm" class="btn-primary" disabled>确认选择</button>
       </div>
     </div>
   </div>
 
+  <!-- 严格的脚本顺序 -->
   <script src="js/assetLoader.js"></script>
   <script src="js/effects.js"></script>
   <script src="js/player.js"></script>
@@ -69,7 +60,7 @@
   <script src="js/monsters/cloudMonster.js"></script>
   <script src="js/monsters/bossMonster.js"></script>
   <script src="js/ui.js"></script>
-  <script src="buffs/buffManager.js"></script>
+  <script src="buffManager.js"></script> <!-- 注意这里：如果他在js文件夹，记得改路径 -->
   <script src="js/game.js"></script>
   <script src="js/main.js"></script>
 </body>
