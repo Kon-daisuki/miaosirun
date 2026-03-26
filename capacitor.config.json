@@ -1,0 +1,6 @@
+{
+  "appId": "com.kondaisuki.miaosirun",
+  "appName": "阿祖喵斯快跑",
+  "webDir": "game",
+  "bundledWebRuntime": false
+}
