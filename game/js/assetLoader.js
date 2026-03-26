@@ -72,12 +72,16 @@ const AssetLoader = (() => {
    把你的图片放到 assets/images/ 对应目录下，
    修改下方路径即可，键名不要改（游戏代码依赖键名）。
 ─────────────────────────────────────────────────────────────── */
+
+// 生成 1 到 4 的随机整数
+const randomBgIndex = Math.floor(Math.random() * 4) + 1;
+
 const ASSET_MANIFEST = {
   // 玩家 —— 建议尺寸：120×120 px 透明 PNG
   player:        'assets/images/player/player.png',
 
-  // 背景 —— 横屏，建议 1920×1080
-  background:    'assets/images/backgrounds/bg.png',
+  // 【修改此处】背景 —— 每次刷新通过模板字符串随机获取 bg1.png 到 bg4.png
+  background:    `assets/images/backgrounds/bg${randomBgIndex}.png`,
 
   // 普通怪 —— 建议 80×80
   monster_normal:'assets/images/monsters/normal.png',
@@ -88,4 +92,3 @@ const ASSET_MANIFEST = {
   // Boss 怪 —— 建议 160×160
   monster_boss:  'assets/images/monsters/boss.png',
 };
-
