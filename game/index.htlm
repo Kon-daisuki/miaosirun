@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>节奏猎手</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- 启动画面 -->
+    <div id="screen-start" class="screen active">
+      <div class="start-content">
+        <h1 class="game-title">节奏猎手</h1>
+        <p class="game-subtitle">RHYTHM HUNTER</p>
+        <button id="btn-start" class="btn-primary">开始游戏</button>
+        <button id="btn-howto" class="btn-secondary">游戏说明</button>
+      </div>
+    </div>
+
+    <!-- 说明画面 -->
+    <div id="screen-howto" class="screen">
+      <div class="howto-content">
+        <h2>游戏说明</h2>
+        <div class="howto-list">
+          <div class="howto-item">
+            <span class="icon">👆</span>
+            <p>点击上方/下方区域消灭对应区域的怪物</p>
+          </div>
+          <div class="howto-item">
+            <span class="icon">👻</span>
+            <p><b>普通怪</b>：靠近时隐身，及时点击消灭</p>
+          </div>
+          <div class="howto-item">
+            <span class="icon">☁️</span>
+            <p><b>云雾怪</b>：云雾环绕，隐身前有明显提示</p>
+          </div>
+          <div class="howto-item">
+            <span class="icon">💀</span>
+            <p><b>Boss怪</b>：疯狂连击对应区域消耗血量</p>
+          </div>
+        </div>
+        <button id="btn-back" class="btn-secondary">返回</button>
+      </div>
+    </div>
+
+    <!-- 游戏画面 -->
+    <div id="screen-game" class="screen">
+      <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <!-- 结算画面 -->
+    <div id="screen-gameover" class="screen">
+      <div class="gameover-content">
+        <h2 id="gameover-title">游戏结束</h2>
+        <div class="score-display">
+          <span class="label">最终得分</span>
+          <span id="final-score" class="score-value">0</span>
+        </div>
+        <div class="score-display">
+          <span class="label">最高连击</span>
+          <span id="final-combo" class="score-value">0</span>
+        </div>
+        <button id="btn-restart" class="btn-primary">再来一局</button>
+        <button id="btn-menu" class="btn-secondary">主菜单</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/assetLoader.js"></script>
+  <script src="js/effects.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/monsters/normalMonster.js"></script>
+  <script src="js/monsters/cloudMonster.js"></script>
+  <script src="js/monsters/bossMonster.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
+
