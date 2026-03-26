@@ -30,16 +30,8 @@
   btnStart.textContent = '加载中…';
   btnStart.disabled = true;
 
-  // 定义音频清单 (匹配 assets/audio 目录)
-  const AUDIO_MANIFEST = {
-    bgm:  'assets/audio/bgm.mp3',
-    hit:  'assets/audio/hit.mp3',
-    miss: 'assets/audio/miss.mp3',
-  };
-
   try {
-    // 传入两个清单进行加载
-    await AssetLoader.load(ASSET_MANIFEST, AUDIO_MANIFEST);
+    await AssetLoader.load(ASSET_MANIFEST);
   } catch (e) {
     console.warn('资源加载失败（将使用占位符）', e);
   }
@@ -52,7 +44,6 @@
   const game   = new Game(canvas);
 
   game.onGameOver = () => {
-    AssetLoader.stop('bgm'); // 游戏结束停止 BGM
     const result = game.getResult();
     finalScore.textContent = result.score;
     finalCombo.textContent = result.maxCombo;
@@ -62,7 +53,6 @@
   /* ── 按钮绑定 ── */
   btnStart.addEventListener('click', () => {
     showScreen('game');
-    AssetLoader.play('bgm', true); // 用户点击后播放 BGM 以绕过浏览器限制
     game.start();
   });
 
@@ -71,13 +61,11 @@
 
   btnRestart.addEventListener('click', () => {
     showScreen('game');
-    AssetLoader.play('bgm', true); // 重开时确保 BGM 播放
     game.start();
   });
 
   btnMenu.addEventListener('click', () => {
     game.stop();
-    AssetLoader.stop('bgm'); // 返回菜单停止 BGM
     showScreen('start');
   });
 
