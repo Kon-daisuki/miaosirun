@@ -1,6 +1,6 @@
 /**
  * game.js
- * 优化点：引入独立 Buff 系统，实现击杀 Boss 后三选一、暂停游戏、应用加成属性。
+ * 优化点：引入独立 Buff 系统，并加入护盾、闪电链、磁力场、狂热、暴击等机制支持。
  */
 
 // --- 独立的音频管理对象 ---
@@ -52,21 +52,34 @@ class Game {
     this._tapFlash        = null;
 
     this._running  = false;
-    this._paused   = false; // 【新增】用于 Boss 死亡时暂停游戏
+    this._paused   = false; 
     this._lastTime = 0;
     this._rafId    = null;
 
-    // 【新增】玩家的属性面板，受肉鸽 Buff 影响
-    this.stats = {
-      clickDamage: 1,        // 基础点击伤害
-      comboDamage: false,    // 是否拥有连击附伤
-      execute: 0,            // 斩杀线百分比 (0.15 = 15%)
-      slowResist: 1.0,       // 难度增长减缓系数
-      scoreMultiplier: 1     // 分数倍率
-    };
+    // 面板属性初始化
+    this.stats = this._getDefaultStats();
 
     document.addEventListener('touchstart', e => this._onTouch(e), { passive: false });
     document.addEventListener('mousedown',  e => this._onMouse(e));
+  }
+
+  // 获取默认的玩家属性
+  _getDefaultStats() {
+    return {
+      clickDamage: 1,        // 基础点击伤害
+      comboDamage: false,    // 连击附伤
+      execute: 0,            // 斩杀线
+      slowResist: 1.0,       // 难度增长减缓
+      scoreMultiplier: 1,    // 分数倍率
+      // 【新增机制】
+      shield: 0,             // 当前护盾层数
+      hasShieldRegen: false, // 是否拥有自动回复护盾能力
+      shieldTimer: 0,        // 护盾回复计时器
+      chainLightning: 0,     // 闪电链触发概率 (0~1)
+      hitRangeBonus: 0,      // 磁力场判定范围增加
+      frenzy: false,         // 狂热状态
+      critChance: 0          // 暴击概率 (0~1)
+    };
   }
 
   start() {
@@ -80,8 +93,7 @@ class Game {
     this._speedMultiplier = 1.0;  
     this._tapFlash        = null;
     
-    // 初始化/重置玩家属性与 Buff
-    this.stats = { clickDamage: 1, comboDamage: false, execute: 0, slowResist: 1.0, scoreMultiplier: 1 };
+    this.stats = this._getDefaultStats();
     if (typeof BuffSystem !== 'undefined') BuffSystem.reset();
 
     this.player = new Player(this.canvas);
@@ -109,7 +121,6 @@ class Game {
     const dt = Math.min(now - this._lastTime, 50);
     this._lastTime = now;
     
-    // 【修改】只有在不暂停时才更新游戏逻辑，但画面依然渲染
     if (!this._paused) {
       this._update(dt);
     }
@@ -123,8 +134,17 @@ class Game {
     if (this._diffTimer >= 15000) { 
       this._diffTimer = 0;
       this._spawnInterval = Math.max(600, this._spawnInterval - 150);
-      // 【修改】结合减速 Buff 计算难度提升
       this._speedMultiplier += (0.15 * this.stats.slowResist); 
+    }
+
+    // 【新增】护盾自动回复逻辑
+    if (this.stats.hasShieldRegen) {
+      this.stats.shieldTimer += dt;
+      if (this.stats.shieldTimer >= 30000) { // 每 30 秒回复 1 层
+        this.stats.shieldTimer = 0;
+        this.stats.shield += 1;
+        UI.spawnComboAnim(this.canvas.width / 2, this.canvas.height / 2, `🛡️护盾 +1`, '#00f0ff');
+      }
     }
 
     this.player.update(dt);
@@ -153,10 +173,16 @@ class Game {
       m.update(dt, this.player.x);
       if ((m.type === 'normal' || m.type === 'cloud') && m.passed && !m._damageDone) {
         m._damageDone = true;
-        this.player.hit();
-        this.combo = 0;
-        AudioSys.playMiss();
-        if (this.player.isDead()) this._gameOver();
+        // 【新增】护盾抵挡小怪伤害
+        if (this.stats.shield > 0) {
+          this.stats.shield -= 1;
+          UI.spawnComboAnim(this.player.x || 120, this.canvas.height / 2, `免疫!`, '#00f0ff');
+        } else {
+          this.player.hit();
+          this.combo = 0;
+          AudioSys.playMiss();
+          if (this.player.isDead()) this._gameOver();
+        }
       }
     }
 
@@ -165,11 +191,18 @@ class Game {
       if (this.boss.killed) {
         this._onBossKilled();
       } else if (this.boss.failed) {
-        this.player.hit();
-        this.combo = 0;
-        this.boss  = null;
-        AudioSys.playMiss();
-        if (this.player.isDead()) this._gameOver();
+        // 【新增】护盾抵挡 Boss 失败的伤害
+        if (this.stats.shield > 0) {
+          this.stats.shield -= 1;
+          UI.spawnComboAnim(this.player.x || 120, this.canvas.height / 2, `免疫!`, '#00f0ff');
+          this.boss = null;
+        } else {
+          this.player.hit();
+          this.combo = 0;
+          this.boss  = null;
+          AudioSys.playMiss();
+          if (this.player.isDead()) this._gameOver();
+        }
       }
     }
 
@@ -220,12 +253,11 @@ class Game {
     Effects.shake(12, 600);
     this.boss = null;
 
-    // 【新增】触发 Buff 三选一弹窗并暂停游戏
     if (typeof BuffSystem !== 'undefined') {
       this._paused = true;
       BuffSystem.showRandomBuffs(this, () => {
-        this._paused = false; // 选完后恢复游戏
-        this._lastTime = performance.now(); // 防止恢复后 dt 过大导致穿模
+        this._paused = false; 
+        this._lastTime = performance.now(); 
       });
     }
   }
@@ -236,7 +268,7 @@ class Game {
   }
 
   _onTouch(e) {
-    if (!this._running || this._paused) return; // 【修改】选 Buff 期间不能点击
+    if (!this._running || this._paused) return; 
     e.preventDefault();
     for (const t of e.changedTouches) {
       const { x, y } = this._toCanvas(t.clientX, t.clientY);
@@ -245,7 +277,7 @@ class Game {
   }
 
   _onMouse(e) {
-    if (!this._running || this._paused) return; // 【修改】选 Buff 期间不能点击
+    if (!this._running || this._paused) return; 
     const { x, y } = this._toCanvas(e.clientX, e.clientY);
     this._handleTap(x, y);
   }
@@ -259,28 +291,38 @@ class Game {
     this._tapFlash = { lane, timer: 200 };
 
     if (this.boss && !this.boss._entering && this.boss.isInLane(lane)) {
-      // 【修改】引入 Buff 伤害系统
-      let damage = this.stats.clickDamage;
-      if (this.stats.comboDamage) damage += Math.floor(this.combo / 15); // 连击附伤
-
-      // 原始 click 会扣除 1 滴血并播放动画
-      this.boss.click(); 
       
-      // 处理超过 1 点的额外伤害
-      if (damage > 1 && this.boss.hp > 0) {
-        this.boss.hp -= (damage - 1);
-        if (this.boss.hp <= 0) {
-           this.boss.hp = 0;
-           this.boss.killed = true;
-        }
+      let damage = this.stats.clickDamage;
+      
+      // 【新增】狂热状态附加伤害
+      if (this.stats.frenzy && this.combo >= 50) {
+        damage += 1;
+      }
+      
+      if (this.stats.comboDamage) damage += Math.floor(this.combo / 15);
+
+      // 【新增】致命暴击概率判定
+      let isCrit = false;
+      if (this.stats.critChance > 0 && Math.random() < this.stats.critChance) {
+        damage *= 2; // 双倍伤害
+        isCrit = true;
       }
 
-      // 处理斩杀机制
+      this.boss.click(); 
+      
+      if (damage > 1 && this.boss.hp > 0) {
+        this.boss.hp -= (damage - 1);
+      }
+
       if (this.stats.execute > 0 && this.boss.hp > 0) {
         if (this.boss.hp / this.boss.maxHp <= this.stats.execute) {
            this.boss.hp = 0;
-           this.boss.killed = true;
         }
+      }
+
+      if (this.boss.hp <= 0) {
+        this.boss.hp = 0;
+        this.boss.killed = true;
       }
 
       this.player.bossHit(lane);
@@ -288,6 +330,11 @@ class Game {
       this.combo++;
       this.maxCombo = Math.max(this.maxCombo, this.combo);
       AudioSys.playHit();
+      
+      // 暴击特效展示
+      if (isCrit) {
+        UI.spawnComboAnim(this.boss.x || cw/2 + 50, this.boss.y || ch/2, `暴击!`, '#ff3aff');
+      }
       return;
     }
 
@@ -300,7 +347,9 @@ class Game {
 
     if (inLane.length > 0) {
       const m = inLane[0]; 
-      const HIT_RANGE = 160; 
+      
+      // 【修改】加入磁力场的判定范围扩大
+      const HIT_RANGE = 160 + this.stats.hitRangeBonus; 
       const playerPos = this.player.x || 120;
 
       if (m.x < playerPos + HIT_RANGE) {
@@ -308,13 +357,23 @@ class Game {
         hit = true;
         this.combo++;
         this.maxCombo = Math.max(this.maxCombo, this.combo);
-        
-        // 【修改】计算 Buff 带来的分数收益翻倍
         const pts = (m.type === 'cloud' ? 150 : 100) * this.stats.scoreMultiplier;
         this.score += pts + (this.combo > 5 ? this.combo * 5 : 0);
         
         AudioSys.playHit();
         UI.spawnComboAnim(m.x, m.y - 50, `+${pts}`, m.type === 'cloud' ? '#cc88ff' : '#00f0ff');
+        
+        // 【新增】闪电链触发判定
+        if (this.stats.chainLightning > 0 && Math.random() < this.stats.chainLightning) {
+          // 寻找同一泳道的下一个活着的怪物
+          const nextM = this.monsters.find(mx => mx.lane === lane && !mx.dead && mx !== m);
+          if (nextM && nextM.x < cw) { 
+            nextM.hit();
+            const nextPts = (nextM.type === 'cloud' ? 150 : 100) * this.stats.scoreMultiplier;
+            this.score += nextPts;
+            UI.spawnComboAnim(nextM.x, nextM.y - 50, `⚡闪电链!`, '#00f0ff');
+          }
+        }
         
         if (this.combo % 5 === 0) {
           UI.spawnComboAnim(cw / 2, ch * 0.12, `${this.combo} COMBO!!`, '#ffd700');
@@ -322,69 +381,4 @@ class Game {
       }
     }
 
-    if (!hit && !this.boss) {
-      this.combo = 0;
-    }
-  }
-
-  _gameOver() {
-    this._running = false;
-    if (this._rafId) cancelAnimationFrame(this._rafId);
-    AudioSys.stopBgm();
-    if (typeof this.onGameOver === 'function') this.onGameOver();
-  }
-
-  _draw() {
-    const ctx = this.ctx;
-    const cw  = this.canvas.width;
-    const ch  = this.canvas.height;
-
-    const shake = Effects.getShakeOffset();
-    ctx.save();
-    ctx.translate(shake.x, shake.y);
-
-    ctx.drawImage(AssetLoader.get('background'), 0, 0, cw, ch);
-
-    ctx.fillStyle = 'rgba(0,200,255,0.04)';
-    ctx.fillRect(0, 0, cw, ch / 2);
-    ctx.fillStyle = 'rgba(255,100,200,0.04)';
-    ctx.fillRect(0, ch / 2, cw, ch / 2);
-
-    if (this._tapFlash) {
-      const a = (this._tapFlash.timer / 200) * 0.22;
-      ctx.fillStyle = this._tapFlash.lane === 'top'
-        ? `rgba(0,220,255,${a})` : `rgba(255,120,220,${a})`;
-      ctx.fillRect(0, this._tapFlash.lane === 'top' ? 0 : ch / 2, cw, ch / 2);
-    }
-
-    ctx.save();
-    ctx.setLineDash([16, 10]);
-    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0, ch / 2);
-    ctx.lineTo(cw, ch / 2);
-    ctx.stroke();
-    ctx.restore();
-
-    Effects.draw(ctx);
-    for (const m of this.monsters) m.draw(ctx);
-    if (this.boss) this.boss.draw(ctx);
-    this.player.draw(ctx);
-
-    UI.draw(ctx, { cw, ch, score: this.score, combo: this.combo,
-      maxCombo: this.maxCombo, hp: this.player.hp, maxHp: this.player.maxHp, boss: this.boss });
-
-    ctx.restore();
-  }
-
-  _resize() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    this.canvas.width        = w;
-    this.canvas.height       = h;
-    this.canvas.style.width  = w + 'px';
-    this.canvas.style.height = h + 'px';
-    if (this.player) this.player.resize(this.canvas);
-  }
-}
+    if (!hit && !this.boss)
