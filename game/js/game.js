@@ -46,6 +46,7 @@ class Game {
     this._bossTimer     = 0;
     this._diffTimer     = 0;
     this.player         = new Player(this.canvas);
+    this._tapFlash      = null;
     Effects.clear();
     UI.clear();
 
@@ -89,6 +90,12 @@ class Game {
     this.player.update(dt);
     Effects.update(dt);
     UI.update(dt);
+
+    // 触控闪光计时
+    if (this._tapFlash) {
+      this._tapFlash.timer -= dt;
+      if (this._tapFlash.timer <= 0) this._tapFlash = null;
+    }
 
     // Boss 计时
     if (!this.boss) {
@@ -181,7 +188,7 @@ class Game {
   _onTouch(e) {
     e.preventDefault();
     for (const t of e.changedTouches) {
-      const rect = this.canvas.getBoundingClientRect();
+      const rect   = this.canvas.getBoundingClientRect();
       const scaleX = this.canvas.width  / rect.width;
       const scaleY = this.canvas.height / rect.height;
       this._handleTap(
@@ -192,7 +199,7 @@ class Game {
   }
 
   _onMouse(e) {
-    const rect = this.canvas.getBoundingClientRect();
+    const rect   = this.canvas.getBoundingClientRect();
     const scaleX = this.canvas.width  / rect.width;
     const scaleY = this.canvas.height / rect.height;
     this._handleTap(
@@ -205,6 +212,9 @@ class Game {
     if (!this._running) return;
 
     const lane = cy < this.canvas.height / 2 ? 'top' : 'bottom';
+
+    // 触控区域闪光反馈（无论是否命中都显示）
+    this._tapFlash = { lane, timer: 150 };
 
     // Boss 连击
     if (this.boss && !this.boss._entering && this.boss.isInLane(lane)) {
@@ -266,11 +276,22 @@ class Game {
     const bg = AssetLoader.get('background');
     ctx.drawImage(bg, 0, 0, cw, ch);
 
-    // 上下触控区域轻微着色（点击时闪光在 _tapFlash 中处理）
+    // 上下触控区域底色
     ctx.fillStyle = 'rgba(0,200,255,0.03)';
     ctx.fillRect(0, 0, cw, ch / 2);
     ctx.fillStyle = 'rgba(255,100,200,0.03)';
     ctx.fillRect(0, ch / 2, cw, ch / 2);
+
+    // 点击闪光反馈
+    if (this._tapFlash) {
+      const alpha = (this._tapFlash.timer / 150) * 0.18;
+      ctx.fillStyle = this._tapFlash.lane === 'top'
+        ? `rgba(0,220,255,${alpha})`
+        : `rgba(255,120,220,${alpha})`;
+      ctx.fillRect(0,
+        this._tapFlash.lane === 'top' ? 0 : ch / 2,
+        cw, ch / 2);
+    }
 
     // 特效（云雾粒子在怪物层下面）
     Effects.draw(ctx);
@@ -300,9 +321,8 @@ class Game {
 
   _resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    // 强制横屏尺寸：取宽高中较大值作为宽
-    const w = Math.max(window.innerWidth, window.innerHeight);
-    const h = Math.min(window.innerWidth, window.innerHeight);
+    const w   = window.innerWidth;
+    const h   = window.innerHeight;
     this.canvas.width  = w * dpr;
     this.canvas.height = h * dpr;
     this.canvas.style.width  = w + 'px';
