@@ -5,35 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>节奏猎手</title>
   <link rel="stylesheet" href="css/style.css" />
-  <style>
-    /* 横屏提示遮罩（竖屏时显示） */
-    #rotate-tip {
-      display: none;
-      position: fixed; 
-      inset: 0; 
-      z-index: 9999;
-      background: #0a0a14;
-      flex-direction: column;
-      align-items: center; 
-      justify-content: center;
-      gap: 20px; 
-      color: #e8e8ff; 
-      font-family: sans-serif;
-      text-align: center;
-      /* 确保遮罩层不响应点击，防止干扰底层 */
-      pointer-events: all;
-    }
-    #rotate-tip.show { display: flex; }
-    #rotate-tip .icon { font-size: 60px; animation: spin 1.5s ease-in-out infinite alternate; }
-    @keyframes spin {
-      from { transform: rotate(-30deg); }
-      to   { transform: rotate(30deg);  }
-    }
-    #rotate-tip p { font-size: 1.1rem; color: #aaa; }
-  </style>
 </head>
 <body>
   <div id="app">
+    <!-- 启动画面 -->
     <div id="screen-start" class="screen active">
       <div class="start-content">
         <h1 class="game-title">节奏猎手</h1>
@@ -43,63 +18,49 @@
       </div>
     </div>
 
+    <!-- 说明画面 -->
     <div id="screen-howto" class="screen">
       <div class="howto-content">
         <h2>游戏说明</h2>
         <div class="howto-list">
-          <div class="howto-item">
-            <span class="icon">👆</span>
-            <p>点击上方/下方区域消灭对应区域的怪物</p>
-          </div>
-          <div class="howto-item">
-            <span class="icon">👻</span>
-            <p><b>普通怪</b>：靠近时隐身，及时点击消灭</p>
-          </div>
-          <div class="howto-item">
-            <span class="icon">☁️</span>
-            <p><b>云雾怪</b>：云雾环绕，隐身前有明显提示</p>
-          </div>
-          <div class="howto-item">
-            <span class="icon">💀</span>
-            <p><b>Boss怪</b>：疯狂连击对应区域消耗血量</p>
-          </div>
+          <div class="howto-item"><span class="icon">👆</span><p>点击上方/下方区域消灭对应区域的怪物</p></div>
+          <div class="howto-item"><span class="icon">👻</span><p>普通怪：靠近时隐身，及时点击消灭</p></div>
+          <div class="howto-item"><span class="icon">☁️</span><p>云雾怪：隐身前有明显提示</p></div>
+          <div class="howto-item"><span class="icon">💀</span><p>Boss怪：疯狂连击消耗血量</p></div>
         </div>
         <button id="btn-back" class="btn-secondary">返回</button>
       </div>
     </div>
 
+    <!-- 游戏画面 -->
     <div id="screen-game" class="screen">
       <canvas id="gameCanvas"></canvas>
     </div>
 
+    <!-- 结算画面 -->
     <div id="screen-gameover" class="screen">
       <div class="gameover-content">
         <h2 id="gameover-title">游戏结束</h2>
-        <div class="score-display">
-          <span class="label">最终得分</span>
-          <span id="final-score" class="score-value">0</span>
-        </div>
-        <div class="score-display">
-          <span class="label">最高连击</span>
-          <span id="final-combo" class="score-value">0</span>
-        </div>
+        <div class="score-display"><span class="label">最终得分</span><span id="final-score" class="score-value">0</span></div>
+        <div class="score-display"><span class="label">最高连击</span><span id="final-combo" class="score-value">0</span></div>
         <button id="btn-restart" class="btn-primary">再来一局</button>
         <button id="btn-menu" class="btn-secondary">主菜单</button>
       </div>
     </div>
     
-    <!-- 【新增】肉鸽奖励选择遮罩层 (复用 screen 类) -->
+    <!-- 肉鸽奖励选择遮罩层 -->
     <div id="buff-modal" class="screen">
       <div class="buff-container">
         <h2>🏆 击败 Boss 奖励</h2>
         <p>请选择一项能力加成：</p>
         <div class="buff-cards" id="buff-cards">
-          <!-- JS 会自动在这里生成 3 个卡片 -->
+          <!-- JS 自动生成 -->
         </div>
+        <!-- 确认按钮 -->
+        <button id="btn-buff-confirm" class="btn-primary" disabled style="margin-top: 25px;">确认选择</button>
       </div>
     </div>
   </div>
-
 
   <script src="js/assetLoader.js"></script>
   <script src="js/effects.js"></script>
@@ -108,52 +69,8 @@
   <script src="js/monsters/cloudMonster.js"></script>
   <script src="js/monsters/bossMonster.js"></script>
   <script src="js/ui.js"></script>
-  
-  <!-- 【新增】引入独立编写的 Buff 管理器 -->
   <script src="buffs/buffManager.js"></script>
-  
   <script src="js/game.js"></script>
   <script src="js/main.js"></script>
-
-  <script>
-    /**
-     * 屏幕方向管理逻辑
-     */
-    (function() {
-      const tip = document.getElementById('rotate-tip');
-      const landscapeQuery = window.matchMedia("(orientation: landscape)");
-
-      function handleOrientationChange(mql) {
-        if (mql.matches) {
-          // 当前是横屏
-          tip.classList.remove('show');
-          // 如果游戏已经初始化，强制更新一次 Canvas 尺寸
-          if (window.gameInstance && typeof window.gameInstance._resize === 'function') {
-            window.gameInstance._resize();
-          }
-        } else {
-          // 当前是竖屏
-          tip.classList.add('show');
-        }
-      }
-
-      // 监听媒体查询变化 (适配新旧浏览器)
-      if (landscapeQuery.addEventListener) {
-        landscapeQuery.addEventListener("change", handleOrientationChange);
-      } else {
-        landscapeQuery.addListener(handleOrientationChange);
-      }
-
-      // 初始检查
-      handleOrientationChange(landscapeQuery);
-
-      // 尝试锁定方向（可选）
-      if (screen.orientation && screen.orientation.lock) {
-        screen.orientation.lock('landscape').catch(() => {
-          console.log("浏览器不支持或未开启全屏，无法锁定方向");
-        });
-      }
-    })();
-  </script>
 </body>
 </html>
