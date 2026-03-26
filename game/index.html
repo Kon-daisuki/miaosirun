@@ -3,21 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <meta name="screen-orientation" content="landscape" />
   <title>节奏猎手</title>
   <link rel="stylesheet" href="css/style.css" />
   <style>
-    /* 竖屏时旋转整个页面 */
-    @media (orientation: portrait) {
-      #app {
-        transform-origin: top left;
-        transform: rotate(90deg) translateY(-100%);
-        width: 100vh;
-        height: 100vw;
-        position: fixed;
-        top: 0; left: 0;
-      }
+    /* 横屏提示遮罩（竖屏时显示） */
+    #rotate-tip {
+      display: none;
+      position: fixed; inset: 0; z-index: 9999;
+      background: #0a0a14;
+      flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 20px; color: #e8e8ff; font-family: sans-serif;
+      text-align: center;
     }
+    #rotate-tip.show { display: flex; }
+    #rotate-tip .icon { font-size: 60px; animation: spin 1.5s ease-in-out infinite alternate; }
+    @keyframes spin {
+      from { transform: rotate(-30deg); }
+      to   { transform: rotate(30deg);  }
+    }
+    #rotate-tip p { font-size: 1.1rem; color: #aaa; }
   </style>
 </head>
 <body>
@@ -81,6 +86,12 @@
     </div>
   </div>
 
+  <!-- 竖屏提示 -->
+  <div id="rotate-tip">
+    <div class="icon">📱➡️</div>
+    <p>请横屏游玩</p>
+  </div>
+
   <script src="js/assetLoader.js"></script>
   <script src="js/effects.js"></script>
   <script src="js/player.js"></script>
@@ -90,5 +101,20 @@
   <script src="js/ui.js"></script>
   <script src="js/game.js"></script>
   <script src="js/main.js"></script>
+  <script>
+    // 尝试锁定横屏（部分浏览器支持）
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('landscape').catch(() => {});
+    }
+    // 竖屏时显示提示，横屏时隐藏
+    const tip = document.getElementById('rotate-tip');
+    function checkOrientation() {
+      const isPortrait = window.innerHeight > window.innerWidth;
+      tip.classList.toggle('show', isPortrait);
+    }
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
+    checkOrientation();
+  </script>
 </body>
 </html>
