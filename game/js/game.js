@@ -2,17 +2,19 @@
  * game.js
  * 优化点：
  * 1. 限制 Boss 同时只能存在一个。
- * 2. Boss 出现后，其所在的泳道不再生成普通小怪。
+ * 2. 【新增】Boss 出现后，其所在的泳道不再生成普通小怪直到 Boss 死亡。
  * 3. 【新增】加入音频管理，实现 BGM、击中和扣血音效。
+ * 4. 【新增】随时间推移难度逐渐增加（刷怪更快、怪物移速更快、Boss血量更高）。
+ * 5. 【新增】Boss 必须在完全没有普通怪物的空闲泳道才能生成。
  */
 
-// --- 【新增】独立的音频管理对象，防止干扰原有的资源加载逻辑 ---
+// --- 独立的音频管理对象 ---
 const AudioSys = {
   bgm: new Audio('assets/audio/bgm.mp3'),
   hit: new Audio('assets/audio/hit.mp3'),
   miss: new Audio('assets/audio/miss.mp3'),
   playBgm() {
-    this.bgm.loop = true;      // 循环播放
+    this.bgm.loop = true;      
     this.bgm.currentTime = 0;
     this.bgm.play().catch(e => console.warn('BGM无法自动播放:', e));
   },
@@ -20,7 +22,6 @@ const AudioSys = {
     this.bgm.pause();
   },
   playHit() {
-    // 使用 cloneNode 保证玩家连续快速点击时，音效可以叠加而不会互相打断
     const s = this.hit.cloneNode();
     s.play().catch(e => console.warn('Hit音效播放失败:', e));
   },
@@ -47,12 +48,13 @@ class Game {
     this.combo    = 0;
     this.maxCombo = 0;
 
-    this._spawnTimer    = 0;
-    this._spawnInterval = 2200;
-    this._bossTimer     = 0;
-    this._bossInterval  = 28000;
-    this._diffTimer     = 0;
-    this._tapFlash      = null;
+    this._spawnTimer      = 0;
+    this._spawnInterval   = 2200;
+    this._bossTimer       = 0;
+    this._bossInterval    = 28000;
+    this._diffTimer       = 0;
+    this._speedMultiplier = 1.0;  // 【新增】难度倍率
+    this._tapFlash        = null;
 
     this._running  = false;
     this._lastTime = 0;
@@ -65,29 +67,28 @@ class Game {
   start() {
     this.score    = 0; this.combo = 0; this.maxCombo = 0;
     this.monsters =[]; this.boss = null;
-    this._spawnTimer    = 0;
-    this._spawnInterval = 2200;
-    this._bossTimer     = 0;
-    this._diffTimer     = 0;
-    this._tapFlash      = null;
-    this.player         = new Player(this.canvas);
+    
+    this._spawnTimer      = 0;
+    this._spawnInterval   = 2200;
+    this._bossTimer       = 0;
+    this._diffTimer       = 0;
+    this._speedMultiplier = 1.0;  // 重置难度
+    this._tapFlash        = null;
+    
+    this.player = new Player(this.canvas);
     Effects.clear();
     UI.clear();
 
     this._running  = true;
     this._lastTime = performance.now();
     
-    // 【新增】开始游戏，播放全程 BGM
     AudioSys.playBgm();
-    
     this._loop(this._lastTime);
   }
 
   stop() {
     this._running = false;
     if (this._rafId) cancelAnimationFrame(this._rafId);
-    
-    // 【新增】停止游戏，暂停 BGM
     AudioSys.stopBgm();
   }
 
@@ -103,10 +104,14 @@ class Game {
   }
 
   _update(dt) {
+    // 【修改】随着时间推移，不断增加难度
     this._diffTimer += dt;
-    if (this._diffTimer >= 15000) {
+    if (this._diffTimer >= 15000) { // 每15秒提升一次难度
       this._diffTimer = 0;
-      this._spawnInterval = Math.max(900, this._spawnInterval - 200);
+      // 刷怪间隔越来越短 (极限为 600ms)
+      this._spawnInterval = Math.max(600, this._spawnInterval - 150);
+      // 怪物移动速度倍率提升
+      this._speedMultiplier += 0.15; 
     }
 
     this.player.update(dt);
@@ -118,10 +123,12 @@ class Game {
       if (this._tapFlash.timer <= 0) this._tapFlash = null;
     }
 
+    // 【修改】Boss生成逻辑：如果满足条件才重置时间
     this._bossTimer += dt;
     if (this._bossTimer >= this._bossInterval) {
-      this._bossTimer = 0;
-      this._spawnBoss();
+      if (this._spawnBoss()) {
+        this._bossTimer = 0; // 生成成功才重新计时
+      }
     }
 
     this._spawnTimer += dt;
@@ -136,10 +143,7 @@ class Game {
         m._damageDone = true;
         this.player.hit();
         this.combo = 0;
-        
-        // 【新增】怪物穿透防线导致扣血时，播放 Miss 音效
         AudioSys.playMiss();
-        
         if (this.player.isDead()) this._gameOver();
       }
     }
@@ -152,10 +156,7 @@ class Game {
         this.player.hit();
         this.combo = 0;
         this.boss  = null;
-        
-        // 【新增】Boss 击败失败导致扣血时，播放 Miss 音效
         AudioSys.playMiss();
-        
         if (this.player.isDead()) this._gameOver();
       }
     }
@@ -166,6 +167,7 @@ class Game {
   _spawnMonster() {
     let availableLanes = ['top', 'bottom'];
 
+    // 只要有 Boss，就在可用泳道里把 Boss 所在的泳道踢掉，做到不刷小怪
     if (this.boss) {
       availableLanes = availableLanes.filter(l => l !== this.boss.lane);
     }
@@ -173,23 +175,47 @@ class Game {
     if (availableLanes.length === 0) return;
 
     const lane = availableLanes[Math.floor(Math.random() * availableLanes.length)];
-    const speed = 0.10 + Math.random() * 0.07;
+    // 【修改】基础移速叠加难度倍率
+    const baseSpeed = 0.10 + Math.random() * 0.07;
+    const speed = baseSpeed * this._speedMultiplier; 
+    
     const opts = { lane, canvasW: this.canvas.width, canvasH: this.canvas.height, speed };
     
     this.monsters.push(Math.random() < 0.55 ? new NormalMonster(opts) : new CloudMonster(opts));
   }
 
+  /**
+   * 【修改】更严格的 Boss 生成条件
+   * @returns {Boolean} 是否成功生成
+   */
   _spawnBoss() {
-    if (this.boss) return; 
+    if (this.boss) return false; 
 
-    const lane = Math.random() < 0.5 ? 'top' : 'bottom';
+    // 获取当前仍然存活的普通怪所在的泳道
+    const occupiedLanes = new Set(this.monsters.filter(m => !m.dead).map(m => m.lane));
+    // 找出【完全被清理干净】的空路
+    const availableLanes =['top', 'bottom'].filter(l => !occupiedLanes.has(l));
+
+    if (availableLanes.length === 0) {
+      // 如果没有空路（两条路都还有怪），返回 false，游戏会在下一帧继续尝试，直到某条路被打空
+      return false; 
+    }
+
+    // 从空闲的泳道中挑选一个出 Boss
+    const lane = availableLanes[Math.floor(Math.random() * availableLanes.length)];
+    
+    // 【修改】Boss血量随速度倍率(难度)和分数提升
+    const dynamicHp = Math.floor(25 * this._speedMultiplier + this.score / 200);
+
     this.boss = new BossMonster({
       lane, 
       canvasW: this.canvas.width, 
       canvasH: this.canvas.height,
-      maxHp: 25 + Math.floor(this.score / 200), 
+      maxHp: dynamicHp, 
       timeLimit: 12000,
     });
+
+    return true; // 成功生成
   }
 
   _onBossKilled() {
@@ -236,10 +262,7 @@ class Game {
       this.score += 10;
       this.combo++;
       this.maxCombo = Math.max(this.maxCombo, this.combo);
-      
-      // 【新增】成功攻击 Boss 时播放 Hit 音效
       AudioSys.playHit();
-      
       return;
     }
 
@@ -262,10 +285,7 @@ class Game {
         this.maxCombo = Math.max(this.maxCombo, this.combo);
         const pts = m.type === 'cloud' ? 150 : 100;
         this.score += pts + (this.combo > 5 ? this.combo * 5 : 0);
-        
-        // 【新增】成功击中小怪时播放 Hit 音效
         AudioSys.playHit();
-        
         UI.spawnComboAnim(m.x, m.y - 50, `+${pts}`, m.type === 'cloud' ? '#cc88ff' : '#00f0ff');
         
         if (this.combo % 5 === 0) {
@@ -282,10 +302,7 @@ class Game {
   _gameOver() {
     this._running = false;
     if (this._rafId) cancelAnimationFrame(this._rafId);
-    
-    // 【新增】游戏结束时停止 BGM
     AudioSys.stopBgm();
-    
     if (typeof this.onGameOver === 'function') this.onGameOver();
   }
 
@@ -342,4 +359,4 @@ class Game {
     this.canvas.style.height = h + 'px';
     if (this.player) this.player.resize(this.canvas);
   }
-}
+      }
