@@ -1,6 +1,8 @@
 /**
  * game.js
- * 坐标系：统一 CSS 像素，不乘 DPR，避免坐标错位
+ * 优化点：
+ * 1. 限制 Boss 同时只能存在一个。
+ * 2. Boss 出现后，其所在的泳道不再生成普通小怪。
  */
 
 class Game {
@@ -30,7 +32,6 @@ class Game {
     this._lastTime = 0;
     this._rafId    = null;
 
-    // 监听 document 保证在画面激活时都能收到事件
     document.addEventListener('touchstart', e => this._onTouch(e), { passive: false });
     document.addEventListener('mousedown',  e => this._onMouse(e));
   }
@@ -84,18 +85,19 @@ class Game {
       if (this._tapFlash.timer <= 0) this._tapFlash = null;
     }
 
-    if (!this.boss) {
-      this._bossTimer += dt;
-      if (this._bossTimer >= this._bossInterval) {
-        this._bossTimer = 0;
-        this._spawnBoss();
-      }
-      this._spawnTimer += dt;
-      if (this._spawnTimer >= this._spawnInterval) {
-        this._spawnTimer = 0;
-        this._spawnMonster();
-      }
+    // --- 修改：生成逻辑判定 ---
+    this._bossTimer += dt;
+    if (this._bossTimer >= this._bossInterval) {
+      this._bossTimer = 0;
+      this._spawnBoss();
     }
+
+    this._spawnTimer += dt;
+    if (this._spawnTimer >= this._spawnInterval) {
+      this._spawnTimer = 0;
+      this._spawnMonster();
+    }
+    // ------------------------
 
     for (const m of this.monsters) {
       m.update(dt, this.player.x);
@@ -122,18 +124,41 @@ class Game {
     this.monsters = this.monsters.filter(m => !m.dead);
   }
 
+  /**
+   * 优化：普通怪物生成避开 Boss 泳道
+   */
   _spawnMonster() {
-    const lane  = Math.random() < 0.5 ? 'top' : 'bottom';
+    let availableLanes = ['top', 'bottom'];
+
+    // 如果 Boss 存在，剔除 Boss 所在的泳道
+    if (this.boss) {
+      availableLanes = availableLanes.filter(l => l !== this.boss.lane);
+    }
+
+    // 如果没有可用泳道（例如未来扩展了多个 Boss），则不生成小怪
+    if (availableLanes.length === 0) return;
+
+    // 从可用泳道中随机选择一个
+    const lane = availableLanes[Math.floor(Math.random() * availableLanes.length)];
     const speed = 0.10 + Math.random() * 0.07;
-    const opts  = { lane, canvasW: this.canvas.width, canvasH: this.canvas.height, speed };
+    const opts = { lane, canvasW: this.canvas.width, canvasH: this.canvas.height, speed };
+    
     this.monsters.push(Math.random() < 0.55 ? new NormalMonster(opts) : new CloudMonster(opts));
   }
 
+  /**
+   * 优化：防止同时出现多个 Boss
+   */
   _spawnBoss() {
+    if (this.boss) return; // 如果当前已有 Boss，直接跳过生成过程
+
     const lane = Math.random() < 0.5 ? 'top' : 'bottom';
     this.boss = new BossMonster({
-      lane, canvasW: this.canvas.width, canvasH: this.canvas.height,
-      maxHp: 25 + Math.floor(this.score / 200), timeLimit: 12000,
+      lane, 
+      canvasW: this.canvas.width, 
+      canvasH: this.canvas.height,
+      maxHp: 25 + Math.floor(this.score / 200), 
+      timeLimit: 12000,
     });
   }
 
@@ -167,9 +192,6 @@ class Game {
     this._handleTap(x, y);
   }
 
-  /**
-   * 核心改动：加入距离判断逻辑
-   */
   _handleTap(cx, cy) {
     const cw = this.canvas.width;
     const ch = this.canvas.height;
@@ -178,7 +200,6 @@ class Game {
     const lane = cy < ch / 2 ? 'top' : 'bottom';
     this._tapFlash = { lane, timer: 200 };
 
-    // Boss连击处理
     if (this.boss && !this.boss._entering && this.boss.isInLane(lane)) {
       this.boss.click();
       this.player.bossHit(lane);
@@ -191,20 +212,14 @@ class Game {
     this.player.attack(lane);
 
     let hit = false;
-    // 按距离从近到远排序
     const inLane = this.monsters
       .filter(m => m.lane === lane && !m.dead && (m.alpha === undefined || m.alpha > 0.05))
       .sort((a, b) => a.x - b.x);
 
     if (inLane.length > 0) {
       const m = inLane[0]; 
-      
-      /** * 判定距离限制：
-       * HIT_RANGE 代表怪物 X 坐标距离玩家 X 坐标的最大允许打击范围。
-       * 如果怪物太远（m.x > player.x + HIT_RANGE），点击无效。
-       */
       const HIT_RANGE = 160; 
-      const playerPos = this.player.x || 120; // 假设玩家基础坐标
+      const playerPos = this.player.x || 120;
 
       if (m.x < playerPos + HIT_RANGE) {
         m.hit();
@@ -221,7 +236,6 @@ class Game {
       }
     }
 
-    // 如果没有击中任何怪物，且当前没有 Boss，则断 Combo
     if (!hit && !this.boss) {
       this.combo = 0;
     }
@@ -287,3 +301,4 @@ class Game {
     if (this.player) this.player.resize(this.canvas);
   }
 }
+
