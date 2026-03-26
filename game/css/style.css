@@ -190,3 +190,52 @@ html, body {
   .btn-primary, .btn-secondary { padding: 12px 32px; font-size: 0.95rem; min-width: 160px; }
 }
 
+/* =====================
+   【新增】肉鸽 Buff 界面
+===================== */
+#buff-modal {
+  background: rgba(0, 0, 0, 0.85); /* 半透明黑底 */
+  backdrop-filter: blur(5px);
+  z-index: 999; /* 保证在最上层 */
+}
+.buff-container {
+  text-align: center;
+  color: var(--text);
+  width: 90%;
+  max-width: 600px;
+}
+.buff-container h2 {
+  color: var(--gold);
+  margin-bottom: 10px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+.buff-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-top: 20px;
+}
+.buff-card {
+  background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+  border: 2px solid #4da8da;
+  border-radius: 12px;
+  padding: 15px 20px;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  text-align: left;
+}
+.buff-card:hover {
+  transform: scale(1.02);
+  box-shadow: 0 0 15px #4da8da;
+  background: linear-gradient(135deg, #2a5298 0%, #1e3c72 100%);
+}
+.buff-card h3 {
+  margin: 0 0 8px 0;
+  color: var(--accent);
+  font-size: 1.2rem;
+}
+.buff-card p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text);
+}
