@@ -1,11 +1,6 @@
 /**
  * game.js
- * 优化点：
- * 1. 限制 Boss 同时只能存在一个。
- * 2. 【新增】Boss 出现后，其所在的泳道不再生成普通小怪直到 Boss 死亡。
- * 3. 【新增】加入音频管理，实现 BGM、击中和扣血音效。
- * 4. 【新增】随时间推移难度逐渐增加（刷怪更快、怪物移速更快、Boss血量更高）。
- * 5. 【新增】Boss 必须在完全没有普通怪物的空闲泳道才能生成。
+ * 优化点：引入独立 Buff 系统，实现击杀 Boss 后三选一、暂停游戏、应用加成属性。
  */
 
 // --- 独立的音频管理对象 ---
@@ -53,12 +48,22 @@ class Game {
     this._bossTimer       = 0;
     this._bossInterval    = 28000;
     this._diffTimer       = 0;
-    this._speedMultiplier = 1.0;  // 【新增】难度倍率
+    this._speedMultiplier = 1.0;  
     this._tapFlash        = null;
 
     this._running  = false;
+    this._paused   = false; // 【新增】用于 Boss 死亡时暂停游戏
     this._lastTime = 0;
     this._rafId    = null;
+
+    // 【新增】玩家的属性面板，受肉鸽 Buff 影响
+    this.stats = {
+      clickDamage: 1,        // 基础点击伤害
+      comboDamage: false,    // 是否拥有连击附伤
+      execute: 0,            // 斩杀线百分比 (0.15 = 15%)
+      slowResist: 1.0,       // 难度增长减缓系数
+      scoreMultiplier: 1     // 分数倍率
+    };
 
     document.addEventListener('touchstart', e => this._onTouch(e), { passive: false });
     document.addEventListener('mousedown',  e => this._onMouse(e));
@@ -72,14 +77,19 @@ class Game {
     this._spawnInterval   = 2200;
     this._bossTimer       = 0;
     this._diffTimer       = 0;
-    this._speedMultiplier = 1.0;  // 重置难度
+    this._speedMultiplier = 1.0;  
     this._tapFlash        = null;
     
+    // 初始化/重置玩家属性与 Buff
+    this.stats = { clickDamage: 1, comboDamage: false, execute: 0, slowResist: 1.0, scoreMultiplier: 1 };
+    if (typeof BuffSystem !== 'undefined') BuffSystem.reset();
+
     this.player = new Player(this.canvas);
     Effects.clear();
     UI.clear();
 
     this._running  = true;
+    this._paused   = false;
     this._lastTime = performance.now();
     
     AudioSys.playBgm();
@@ -98,20 +108,23 @@ class Game {
     if (!this._running) return;
     const dt = Math.min(now - this._lastTime, 50);
     this._lastTime = now;
-    this._update(dt);
+    
+    // 【修改】只有在不暂停时才更新游戏逻辑，但画面依然渲染
+    if (!this._paused) {
+      this._update(dt);
+    }
+    
     this._draw();
     this._rafId = requestAnimationFrame(t => this._loop(t));
   }
 
   _update(dt) {
-    // 【修改】随着时间推移，不断增加难度
     this._diffTimer += dt;
-    if (this._diffTimer >= 15000) { // 每15秒提升一次难度
+    if (this._diffTimer >= 15000) { 
       this._diffTimer = 0;
-      // 刷怪间隔越来越短 (极限为 600ms)
       this._spawnInterval = Math.max(600, this._spawnInterval - 150);
-      // 怪物移动速度倍率提升
-      this._speedMultiplier += 0.15; 
+      // 【修改】结合减速 Buff 计算难度提升
+      this._speedMultiplier += (0.15 * this.stats.slowResist); 
     }
 
     this.player.update(dt);
@@ -123,11 +136,10 @@ class Game {
       if (this._tapFlash.timer <= 0) this._tapFlash = null;
     }
 
-    // 【修改】Boss生成逻辑：如果满足条件才重置时间
     this._bossTimer += dt;
     if (this._bossTimer >= this._bossInterval) {
       if (this._spawnBoss()) {
-        this._bossTimer = 0; // 生成成功才重新计时
+        this._bossTimer = 0; 
       }
     }
 
@@ -166,45 +178,27 @@ class Game {
 
   _spawnMonster() {
     let availableLanes = ['top', 'bottom'];
-
-    // 只要有 Boss，就在可用泳道里把 Boss 所在的泳道踢掉，做到不刷小怪
     if (this.boss) {
       availableLanes = availableLanes.filter(l => l !== this.boss.lane);
     }
-
     if (availableLanes.length === 0) return;
 
     const lane = availableLanes[Math.floor(Math.random() * availableLanes.length)];
-    // 【修改】基础移速叠加难度倍率
     const baseSpeed = 0.10 + Math.random() * 0.07;
     const speed = baseSpeed * this._speedMultiplier; 
     
     const opts = { lane, canvasW: this.canvas.width, canvasH: this.canvas.height, speed };
-    
     this.monsters.push(Math.random() < 0.55 ? new NormalMonster(opts) : new CloudMonster(opts));
   }
 
-  /**
-   * 【修改】更严格的 Boss 生成条件
-   * @returns {Boolean} 是否成功生成
-   */
   _spawnBoss() {
     if (this.boss) return false; 
-
-    // 获取当前仍然存活的普通怪所在的泳道
     const occupiedLanes = new Set(this.monsters.filter(m => !m.dead).map(m => m.lane));
-    // 找出【完全被清理干净】的空路
     const availableLanes =['top', 'bottom'].filter(l => !occupiedLanes.has(l));
 
-    if (availableLanes.length === 0) {
-      // 如果没有空路（两条路都还有怪），返回 false，游戏会在下一帧继续尝试，直到某条路被打空
-      return false; 
-    }
+    if (availableLanes.length === 0) return false; 
 
-    // 从空闲的泳道中挑选一个出 Boss
     const lane = availableLanes[Math.floor(Math.random() * availableLanes.length)];
-    
-    // 【修改】Boss血量随速度倍率(难度)和分数提升
     const dynamicHp = Math.floor(25 * this._speedMultiplier + this.score / 200);
 
     this.boss = new BossMonster({
@@ -214,8 +208,7 @@ class Game {
       maxHp: dynamicHp, 
       timeLimit: 12000,
     });
-
-    return true; // 成功生成
+    return true; 
   }
 
   _onBossKilled() {
@@ -226,6 +219,15 @@ class Game {
     UI.spawnComboAnim(this.canvas.width / 2, this.canvas.height / 2 - 40, `BOSS +${bonus}`, '#ffd700');
     Effects.shake(12, 600);
     this.boss = null;
+
+    // 【新增】触发 Buff 三选一弹窗并暂停游戏
+    if (typeof BuffSystem !== 'undefined') {
+      this._paused = true;
+      BuffSystem.showRandomBuffs(this, () => {
+        this._paused = false; // 选完后恢复游戏
+        this._lastTime = performance.now(); // 防止恢复后 dt 过大导致穿模
+      });
+    }
   }
 
   _toCanvas(clientX, clientY) {
@@ -234,7 +236,7 @@ class Game {
   }
 
   _onTouch(e) {
-    if (!this._running) return;
+    if (!this._running || this._paused) return; // 【修改】选 Buff 期间不能点击
     e.preventDefault();
     for (const t of e.changedTouches) {
       const { x, y } = this._toCanvas(t.clientX, t.clientY);
@@ -243,7 +245,7 @@ class Game {
   }
 
   _onMouse(e) {
-    if (!this._running) return;
+    if (!this._running || this._paused) return; // 【修改】选 Buff 期间不能点击
     const { x, y } = this._toCanvas(e.clientX, e.clientY);
     this._handleTap(x, y);
   }
@@ -257,7 +259,30 @@ class Game {
     this._tapFlash = { lane, timer: 200 };
 
     if (this.boss && !this.boss._entering && this.boss.isInLane(lane)) {
-      this.boss.click();
+      // 【修改】引入 Buff 伤害系统
+      let damage = this.stats.clickDamage;
+      if (this.stats.comboDamage) damage += Math.floor(this.combo / 15); // 连击附伤
+
+      // 原始 click 会扣除 1 滴血并播放动画
+      this.boss.click(); 
+      
+      // 处理超过 1 点的额外伤害
+      if (damage > 1 && this.boss.hp > 0) {
+        this.boss.hp -= (damage - 1);
+        if (this.boss.hp <= 0) {
+           this.boss.hp = 0;
+           this.boss.killed = true;
+        }
+      }
+
+      // 处理斩杀机制
+      if (this.stats.execute > 0 && this.boss.hp > 0) {
+        if (this.boss.hp / this.boss.maxHp <= this.stats.execute) {
+           this.boss.hp = 0;
+           this.boss.killed = true;
+        }
+      }
+
       this.player.bossHit(lane);
       this.score += 10;
       this.combo++;
@@ -283,8 +308,11 @@ class Game {
         hit = true;
         this.combo++;
         this.maxCombo = Math.max(this.maxCombo, this.combo);
-        const pts = m.type === 'cloud' ? 150 : 100;
+        
+        // 【修改】计算 Buff 带来的分数收益翻倍
+        const pts = (m.type === 'cloud' ? 150 : 100) * this.stats.scoreMultiplier;
         this.score += pts + (this.combo > 5 ? this.combo * 5 : 0);
+        
         AudioSys.playHit();
         UI.spawnComboAnim(m.x, m.y - 50, `+${pts}`, m.type === 'cloud' ? '#cc88ff' : '#00f0ff');
         
@@ -359,4 +387,4 @@ class Game {
     this.canvas.style.height = h + 'px';
     if (this.player) this.player.resize(this.canvas);
   }
-      }
+}
