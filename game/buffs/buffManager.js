@@ -1,7 +1,6 @@
 /**
  * buffs/buffManager.js
  * 独立的肉鸽奖励系统，全面加强了攻击力相关的 Buff
- * 增加了“先选中、后确认”的二级确认机制
  */
 
 const BuffSystem = (() => {
@@ -87,19 +86,13 @@ const BuffSystem = (() => {
   let activeBuffs =[]; // 记录本局已获得的 buff
 
   function showRandomBuffs(game, onSelectCallback) {
-    // 1. 随机打乱并抽取 3 个
     const shuffled =[...allBuffs].sort(() => 0.5 - Math.random());
     const choices = shuffled.slice(0, 3);
 
     const modal = document.getElementById('buff-modal');
     const cardsContainer = document.getElementById('buff-cards');
-    const confirmBtn = document.getElementById('btn-buff-confirm'); // 获取确认按钮
-
     cardsContainer.innerHTML = ''; 
-    let selectedBuff = null; // 用于存储当前选中的 Buff
-    confirmBtn.disabled = true; // 初始状态禁用确认按钮
 
-    // 2. 生成卡片
     choices.forEach(buff => {
       const card = document.createElement('div');
       card.className = 'buff-card';
@@ -107,34 +100,14 @@ const BuffSystem = (() => {
         <h3>${buff.name}</h3>
         <p>${buff.desc}</p>
       `;
-
-      // 点击卡片时的逻辑：高亮并记录，不立即生效
       card.onclick = () => {
-        // 清除其他卡片的选中状态
-        Array.from(cardsContainer.children).forEach(c => c.classList.remove('selected'));
-        // 给当前卡片添加选中状态
-        card.classList.add('selected');
-        
-        selectedBuff = buff;      // 记录选中的 buff 数据
-        confirmBtn.disabled = false; // 激活确认按钮
+        buff.apply(game);
+        activeBuffs.push(buff.id);
+        modal.classList.remove('active');
+        onSelectCallback(); 
       };
-
       cardsContainer.appendChild(card);
     });
-
-    // 3. 点击确认按钮的逻辑
-    confirmBtn.onclick = () => {
-      if (!selectedBuff) return;
-
-      // 正式应用 Buff
-      selectedBuff.apply(game);
-      activeBuffs.push(selectedBuff.id);
-
-      // 隐藏界面并恢复游戏
-      modal.classList.remove('active');
-      confirmBtn.onclick = null; // 清除本次点击事件，防止重复触发
-      onSelectCallback(); 
-    };
 
     modal.classList.add('active'); 
   }
