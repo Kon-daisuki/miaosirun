@@ -1,62 +1,73 @@
 /**
  * assetLoader.js
  * 统一管理图片资源加载
- * 
- * 使用方式：
- *   AssetLoader.load({ player: 'assets/images/player/run.png', ... })
- *   然后通过 AssetLoader.get('player') 取图
- *
- * 若图片不存在，会自动生成占位符，游戏不会崩溃
  */
 
 const AssetLoader = (() => {
   const _cache = {};
+  const _isReal = {}; // 【新增】记录该图片是否真实存在
 
-  /**
-   * 批量加载图片
-   * @param {Object} manifest  key->url 的映射表
-   * @returns {Promise<void>}
-   */
   function load(manifest) {
+    // 【新增】自动将 player1 到 player20 塞入探测清单
+    for(let i = 1; i <= 20; i++) {
+      if(!manifest[`player${i}`]) {
+        manifest[`player${i}`] = `assets/images/player/player${i}.png`;
+      }
+    }
+    // 确保默认 player 存在
+    if(!manifest['player']) manifest['player'] = 'assets/images/player/player.png';
+
     const promises = Object.entries(manifest).map(([key, url]) => {
       return new Promise((resolve) => {
         const img = new Image();
-        img.onload = () => { _cache[key] = img; resolve(); };
+        img.onload = () => { 
+          _cache[key] = img; 
+          _isReal[key] = true; // 存在
+          resolve(); 
+        };
         img.onerror = () => {
-          // 生成占位符 Canvas
           _cache[key] = _makePlaceholder(key, 80, 80);
+          _isReal[key] = false; // 不存在，被替换为占位符
           resolve();
         };
         img.src = url;
       });
     });
-    return Promise.all(promises);
+
+    return Promise.all(promises).then(() => {
+       // 【新增】加载完成后，调用我们在 index.html 中定义的 UI 初始化方法
+       if(typeof window.initCharSelectUI === 'function') {
+         window.initCharSelectUI();
+       }
+    });
   }
 
-  /** 取图，找不到返回占位符 */
   function get(key) {
     return _cache[key] || _makePlaceholder(key, 80, 80);
   }
 
-  /** 判断是否已加载 */
   function has(key) { return !!_cache[key]; }
 
-  /**
-   * 生成彩色占位符 Canvas（无图时显示）
-   */
+  // 【新增】返回所有真实存在的角色 ID
+  function getValidPlayers() {
+    let players = [];
+    if (_isReal['player']) players.push('player');
+    for(let i = 1; i <= 20; i++) {
+      if (_isReal[`player${i}`]) players.push(`player${i}`);
+    }
+    return players;
+  }
+
   function _makePlaceholder(label, w, h) {
     const c = document.createElement('canvas');
     c.width = w; c.height = h;
     const ctx = c.getContext('2d');
-    // 背景
     const hue = (label.charCodeAt(0) * 37) % 360;
     ctx.fillStyle = `hsl(${hue},60%,30%)`;
     ctx.fillRect(0, 0, w, h);
-    // 边框
     ctx.strokeStyle = `hsl(${hue},80%,60%)`;
     ctx.lineWidth = 2;
     ctx.strokeRect(1, 1, w - 2, h - 2);
-    // 文字
     ctx.fillStyle = '#fff';
     ctx.font = `bold ${Math.floor(w / 6)}px sans-serif`;
     ctx.textAlign = 'center';
@@ -65,30 +76,16 @@ const AssetLoader = (() => {
     return c;
   }
 
-  return { load, get, has };
+  return { load, get, has, getValidPlayers };
 })();
-
-/* ─── 资源清单 ───────────────────────────────────────────────────
-   把你的图片放到 assets/images/ 对应目录下，
-   修改下方路径即可，键名不要改（游戏代码依赖键名）。
-─────────────────────────────────────────────────────────────── */
 
 // 生成 1 到 4 的随机整数
 const randomBgIndex = Math.floor(Math.random() * 4) + 1;
 
 const ASSET_MANIFEST = {
-  // 玩家 —— 建议尺寸：120×120 px 透明 PNG
-  player:        'assets/images/player/player.png',
-
-  // 【修改此处】背景 —— 每次刷新通过模板字符串随机获取 bg1.png 到 bg4.png
   background:    `assets/images/backgrounds/bg${randomBgIndex}.png`,
-
-  // 普通怪 —— 建议 80×80
   monster_normal:'assets/images/monsters/normal.png',
-
-  // 云雾怪 —— 建议 80×80
   monster_cloud: 'assets/images/monsters/cloud.png',
-
-  // Boss 怪 —— 建议 160×160
   monster_boss:  'assets/images/monsters/boss.png',
+  // player 的路径探测已在上面的 load 函数内自动进行
 };
