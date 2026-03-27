@@ -1,4 +1,4 @@
-# 节奏猎手 - Rhythm Hunter
+# 阿祖喵斯快跑 - AZU-NYAS RUN
 
 一款横屏节奏躲避游戏，支持触屏与鼠标操作，可直接部署到 GitHub Pages。
 
