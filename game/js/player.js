@@ -4,8 +4,10 @@
  */
 
 class Player {
-  constructor(canvas) {
+  // 【修改】构造函数增加了 charId 参数
+  constructor(canvas, charId = 'player') {
     this.canvas = canvas;
+    this.charId = charId; // 保存当前角色ID
     this.w = 120;
     this.h = 120;
     this.x = 80;
@@ -20,7 +22,6 @@ class Player {
     this._flashDuration = 600;
     this._bobTimer      = 0;
 
-    // 攻击状态机: 'idle' | 'dash' | 'return'
     this._phase     = 'idle';
     this._targetY   = this.baseY;
     this._dashSpeed = 0;
@@ -32,7 +33,6 @@ class Player {
     if (this._phase === 'idle') this.y = this.baseY;
   }
 
-  /** 触发攻击动画 */
   attack(lane) {
     if (this._phase !== 'idle') return;
     this._phase     = 'dash';
@@ -42,7 +42,6 @@ class Player {
     this._dashSpeed = Math.abs(this._targetY - this.y) / 80;
   }
 
-  /** Boss 连击时小抖动 */
   bossHit(lane) {
     this.y          = lane === 'top'
       ? this.canvas.height * 0.25
@@ -88,7 +87,6 @@ class Player {
 
     ctx.save();
 
-    // 受击红闪
     if (this._hitFlash > 0) {
       const t = this._hitFlash / this._flashDuration;
       if (Math.floor(t * 10) % 2 === 0) {
@@ -101,7 +99,6 @@ class Player {
       }
     }
 
-    // 冲刺时横向拉伸
     if (this._phase !== 'idle') {
       const span = Math.abs(this._targetY - this.baseY) || 1;
       const prog = 1 - Math.abs(this.y - (this._phase === 'dash' ? this.baseY : this._targetY)) / span;
@@ -112,7 +109,8 @@ class Player {
       ctx.translate(-this.x, -drawY);
     }
 
-    const img = AssetLoader.get('player');
+    // 【修改】根据自身的 charId 绘制对应的图片
+    const img = AssetLoader.get(this.charId);
     ctx.drawImage(img, this.x - this.w / 2, drawY - this.h / 2, this.w, this.h);
     ctx.restore();
   }
