@@ -2,7 +2,6 @@
  * game.js
  */
 
-// --- 音频管理对象 ---
 const AudioSys = {
   bgm: new Audio('assets/audio/bgm.mp3'),
   hit: new Audio('assets/audio/hit.mp3'),
@@ -33,6 +32,7 @@ class Game {
     this._resize();
     window.addEventListener('resize', () => this._resize());
 
+    // 默认给个占位，真正的实例化在 start() 里
     this.player   = new Player(canvas);
     this.monsters =[];
     this.boss     = null;
@@ -86,7 +86,10 @@ class Game {
     this.stats = this._getDefaultStats();
     if (typeof BuffSystem !== 'undefined') BuffSystem.reset();
 
-    this.player = new Player(this.canvas);
+    // 【修改】从全局变量读取用户选择的角色 ID，并传入 Player
+    const selectedCharId = window.selectedPlayerKey || 'player';
+    this.player = new Player(this.canvas, selectedCharId);
+    
     Effects.clear();
     UI.clear();
 
@@ -214,7 +217,6 @@ class Game {
     this.score += bonus;
     this.combo += 5;
     UI.spawnComboAnim(this.canvas.width / 2, this.canvas.height / 2 - 40, `BOSS +${bonus}`, '#ffd700');
-    // 删除了 Effects.shake
     this.boss = null;
 
     if (typeof BuffSystem !== 'undefined') {
@@ -269,7 +271,6 @@ class Game {
 
   _draw() {
     const ctx = this.ctx; const cw = this.canvas.width; const ch = this.canvas.height;
-    // 移除了 shake 偏移逻辑，画面不再震动
     ctx.save();
     ctx.drawImage(AssetLoader.get('background'), 0, 0, cw, ch);
     
@@ -308,4 +309,4 @@ class Game {
     if (!this._running || this._paused) return;
     this._handleTap(e.clientX, e.clientY);
   }
-        }
+}
